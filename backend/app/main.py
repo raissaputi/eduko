@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+# from routers import problems, submissions  # if you already have them
+from routers import chat
 
 app = FastAPI(title="Research MVP")
 
@@ -12,6 +14,8 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+app.include_router(chat.router)
 
 # --- Separate problem sets ---
 @app.get("/api/problems/fe")

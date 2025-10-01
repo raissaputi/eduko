@@ -81,6 +81,5 @@ body {
   overflow: hidden; /* page shouldn't scroll; panes will */
 }
 
-/* keep your buttons/links/light-mode overrides ... */
-
-/* You can keep or remove the old helpers; they no longer drive layout */
+.blink { animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }

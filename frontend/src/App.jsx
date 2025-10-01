@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import FEWorkbench from "./fe/FEWorkbench"; // adjust if path differs
+import ChatPanel from "./components/Chat/ChatPanel";
 
 const API = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
@@ -52,7 +53,7 @@ export default function App() {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr 320px",
+        gridTemplateColumns: "1fr 450px",
         height: "100vh",
         overflow: "hidden",
       }}
@@ -129,10 +130,7 @@ export default function App() {
           background: "#0f1115",
         }}
       >
-        <h3 style={{ marginTop: 0 }}>Chat (coming next)</h3>
-        <p>
-          This will integrate with <code>/api/chat</code> later.
-        </p>
+        <ChatPanel problem={prb} />
       </aside>
     </div>
   );
