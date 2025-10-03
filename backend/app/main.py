@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # from routers import problems, submissions  # if you already have them
-from routers import chat
+from app.routers import chat
 
 app = FastAPI(title="Research MVP")
 

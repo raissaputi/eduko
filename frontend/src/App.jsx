@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import FEWorkbench from "./fe/FEWorkbench"; // adjust if path differs
 import ChatPanel from "./components/Chat/ChatPanel";
 
+
 const API = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 export default function App() {
