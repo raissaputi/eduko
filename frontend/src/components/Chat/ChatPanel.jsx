@@ -36,15 +36,7 @@ function CodeBlock({ inline, className, children, ...props }) {
 }
 
 export default function ChatPanel({ problem }) {
-  const [messages, setMessages] = useState([
-    {
-      id: "m0",
-      role: "assistant",
-      text:
-        "Hi! Ask me for a *hint* or paste a snippet.\n\n" +
-        "I support **Markdown** and code blocks:\n\n```html\n<div class=\"card\">Hello</div>\n```",
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [connecting, setConnecting] = useState(true);
   const [online, setOnline] = useState(false);
