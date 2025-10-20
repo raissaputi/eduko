@@ -16,6 +16,7 @@ backend/*.pyd
 backend/.mypy_cache/
 backend/.pytest_cache/
 backend/.env
+backend/data
 
 # VSCode / IDE
 .vscode/
