@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import chat, submissions, sessions, events
+from app.routers.submissions_dv import router as dv_router
+from app.routers.recording import router as rec_router
+from app.routers.survey import router as survey_router
 
 app = FastAPI(title="Research MVP")
 
@@ -16,8 +19,13 @@ def health():
 
 app.include_router(chat.router)
 app.include_router(submissions.router)
+app.include_router(submissions.snapshots_router)
 app.include_router(sessions.router)
 app.include_router(events.router)
+app.include_router(dv_router)
+app.include_router(rec_router)
+app.include_router(survey_router)
+
     
 # --- Separate problem sets ---
 @app.get("/api/problems/fe")

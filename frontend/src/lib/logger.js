@@ -4,7 +4,12 @@ let timer = null
 
 export function logEvent(type, payload = {}) {
   const session_id = sessionStorage.getItem('session_id') || 'anon'
-  buf.push({ type, payload, ts: Date.now(), session_id })
+  buf.push({
+    event_type: type,
+    payload,
+    client_ts: Date.now(),
+    session_id
+  })
   if (!timer) timer = setTimeout(flush, 800)
 }
 

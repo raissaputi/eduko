@@ -47,6 +47,7 @@ export default function ChatPanel({ problem }) {
   const scrollRef = useRef(null)
 
   const meta = useMemo(() => ({
+    session_id: sessionStorage.getItem('session_id') || 'anon',
     problem_id: problem?.id ?? null,
     problem_title: problem?.title ?? null,
     problem_statement: problem?.statement ?? null

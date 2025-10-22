@@ -1,7 +1,7 @@
 // src/fe/FEWorkbench.jsx
 import { useRef, useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { logEvent } from '../lib/logger'
+import { logEvent } from '../lib/logger.js'
 
 function debounce(fn, ms = 300) {
   let t
@@ -11,10 +11,14 @@ function debounce(fn, ms = 300) {
   }
 }
 
-export default function FEWorkbench({ problem, value, onChange, onSubmit }) {
+export default function FEWorkbench({ problem, value, onChange }) {
   const iframeRef = useRef(null)
   const [fs, setFs] = useState(false)            // fullscreen for Preview
   const [code, setCode] = useState(value || '')  // local mirror in case parent is slow
+  const [firstPreview, setFirstPreview] = useState(false)
+  const [firstSubmit, setFirstSubmit] = useState(false)
+  const API = import.meta.env.VITE_API_BASE || ""
+  const sessionId = sessionStorage.getItem('session_id') || 'anon'
 
   // log when task opens (problem changes)
   useEffect(() => {
@@ -39,39 +43,63 @@ export default function FEWorkbench({ problem, value, onChange, onSubmit }) {
     debouncedCodeLog(next)
   }
 
-  const run = () => {
+  const run = async () => {
     logEvent('run_click', { problem_id: problem?.id })
     if (!iframeRef.current) return
     // prefer latest local code (handles Monaco onChange timings)
     iframeRef.current.srcdoc = code || ''
     logEvent('preview_refresh', { problem_id: problem?.id })
+
+    try {
+      const resp = await fetch(`${API}/api/snapshots/fe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          problem_id: problem?.id,
+          code
+        })
+      })
+      if (resp.ok) {
+        const { filename } = await resp.json()
+        logEvent('snapshot_saved', { problem_id: problem?.id, filename })
+      } else {
+        console.warn('snapshot failed', resp.status)
+      }
+    } catch (e) {
+      console.warn('snapshot error', e)
+    }
+
+    if (!firstPreview) {
+      setFirstPreview(true)
+      logEvent('first_preview', { problem_id: problem?.id })
+    }
   }
 
   // live render (optional). if you prefer manual Run only, comment this out
-  useEffect(() => {
-    if (iframeRef.current) {
-      iframeRef.current.srcdoc = code || ''
-    }
-  }, [code])
+  // useEffect(() => {
+  //   if (iframeRef.current) {
+  //     iframeRef.current.srcdoc = code || ''
+  //   }
+  // }, [code])
 
   const handleSubmit = async () => {
     logEvent('submit_click', { problem_id: problem?.id })
-    if (onSubmit) {
-      await onSubmit({ htmlDocument: code || '' })
-      logEvent('submit_sent', { problem_id: problem?.id, via: 'prop' })
-      return
-    }
-    // fallback example: POST directly to backend
-    await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/submissions/fe`, {
+    // Always send final explicitly (even if parent gave onSubmit)
+    await fetch(`${API}/api/submissions/fe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session_id: sessionStorage.getItem('session_id'),
+        session_id: sessionId,
         problem_id: problem?.id,
         code
       })
     })
     logEvent('submit_sent', { problem_id: problem?.id, via: 'api' })
+    if (!firstSubmit) {
+      setFirstSubmit(true)
+      logEvent('first_submit', { problem_id: problem?.id })
+    }
   }
 
   return (
