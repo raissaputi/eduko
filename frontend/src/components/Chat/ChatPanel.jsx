@@ -41,7 +41,6 @@ function CodeBlock({ inline, className, children, ...props }) {
 export default function ChatPanel({ problem }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [connecting, setConnecting] = useState(true)
   const [online, setOnline] = useState(false)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
@@ -76,7 +75,6 @@ export default function ChatPanel({ problem }) {
     wsRef.current = ws
 
     ws.onopen = () => {
-      setConnecting(false)
       setOnline(true)
       logEvent('chat_ws_open', { url: WS_URL })
     }
@@ -165,41 +163,34 @@ export default function ChatPanel({ problem }) {
   }
 
   return (
-    <div className='chat-root minimal'>
-      <div className='chat-head'>
-        <div className='title'>Assistant</div>
-        <div className='dotwrap'>
-          <span className={`dot ${online ? 'live' : connecting ? 'connecting' : 'offline'}`} />
-          <span className='status'>{connecting ? 'Connecting…' : online ? 'Live' : 'Offline'}</span>
-        </div>
-      </div>
 
-      <div ref={scrollRef} className='chat-scroll'>
-        {messages.map(m => (
-          <div key={m.id} className={`row ${m.role}`}>
-            <div className={`bubble ${m.role}`}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{ code: CodeBlock }}
-              >
-                {m.text}
-              </ReactMarkdown>
-              {m.streaming && <span className='cursor'>▍</span>}
+      <div className="chat-root">
+        <div ref={scrollRef} className='chat-scroll'>
+          {messages.map(m => (
+            <div key={m.id} className={`row ${m.role}`}>
+              <div className={`bubble ${m.role}`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={{ code: CodeBlock }}
+                >
+                  {m.text}
+                </ReactMarkdown>
+                {m.streaming && <span className='cursor'>▍</span>}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div className='chat-input'>
-        <textarea
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={onKey}
-          placeholder='Ask anything...'
-        />
-        <button onClick={send}>Send</button>
-      </div>
+        <div className='chat-input'>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={onKey}
+            placeholder='Ask anything...'
+          />
+          <button onClick={send}>Send</button>
+        </div>
     </div>
   )
 }
