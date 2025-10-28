@@ -1,44 +1,42 @@
-# submissions_dv.py
+# app/routers/submissions_dv.py
 from fastapi import APIRouter
 from pydantic import BaseModel
-import os, json, time
+import time
+
+from app.services.writer import save_submit_final, append_event
+from app.routers.sessions import ensure_session_test_type
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions-dv"])
 
-class DVSubmit(BaseModel):
+
+# ---------- Models ----------
+
+class DVSubmissionPayload(BaseModel):
     session_id: str
     problem_id: str
-    code: str   # user’s matplotlib code (we’ll just store it for now)
+    code: str
+
+
+# ---------- DV Final Submission ----------
 
 @router.post("/dv")
-def submit_dv(payload: DVSubmit):
-    base = f"data/sessions/{payload.session_id}/submissions/dv-{payload.problem_id}"
-    os.makedirs(base, exist_ok=True)
+async def submit_dv(payload: DVSubmissionPayload):
+    """
+    Save Data Visualization (DV) final submission and log it.
+    Each participant is locked to test_type='dv'.
+    """
+    ensure_session_test_type(payload.session_id, "dv")
 
-    # find next attempt number
-    attempt_no = 1
-    while os.path.exists(f"{base}/attempt-{attempt_no}.py"):
-        attempt_no += 1
+    save_submit_final(payload.session_id, payload.problem_id, payload.code, {"kind": "dv"})
 
-    py_path = f"{base}/attempt-{attempt_no}.py"
-    meta_path = f"{base}/meta.jsonl"
+    append_event(payload.session_id, {
+        "event_type": "submission_saved_dv",
+        "payload": {
+            "problem_id": payload.problem_id,
+            "bytes": len(payload.code),
+            "kind": "dv",
+        },
+        "client_ts": int(time.time() * 1000),
+    })
 
-    with open(py_path, "w", encoding="utf-8") as f:
-        f.write(payload.code)
-
-    meta = {
-        "ts": int(time.time()*1000),
-        "problem_id": payload.problem_id,
-        "attempt_no": attempt_no,
-        "bytes": len(payload.code),
-        "path": py_path
-    }
-    with open(meta_path, "a", encoding="utf-8") as mf:
-        mf.write(json.dumps(meta) + "\n")
-
-    # optional: append a human line (nice for quick audits)
-    with open(f"data/sessions/{payload.session_id}/events.pretty.log", "a", encoding="utf-8") as pf:
-        pf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
-                 f"{payload.session_id} submitted DV code — saved to {py_path} (attempt {attempt_no}).\n")
-
-    return {"ok": True, "attempt_no": attempt_no, "path": py_path}
+    return {"status": "ok"}

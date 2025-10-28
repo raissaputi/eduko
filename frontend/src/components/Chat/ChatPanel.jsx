@@ -11,7 +11,7 @@ const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const WS_URL = (API.replace('http', 'ws') + '/ws/chat').replace(/\/+$/, '')
 
 /** Minimal code block with header + Copy */
-function CodeBlock({ inline, className, children, ...props }) {
+function CodeBlock({ inline, className, children, problemId, ...props }) {
   if (inline) return <code className={className} {...props}>{children}</code>
   const codeRef = useRef(null)
   const [copied, setCopied] = useState(false)
@@ -19,19 +19,37 @@ function CodeBlock({ inline, className, children, ...props }) {
     (className?.match(/language-([\w+-]+)/)?.[1]) ||
     (className?.split(' ').find(s => s !== 'hljs') || 'text')
 
-  const copy = async () => {
+  const copy = async (text, lang = "text") => {
     try {
-      await navigator.clipboard.writeText(codeRef.current?.innerText ?? '')
-      setCopied(true)
-      setTimeout(() => setCopied(false), 900)
-    } catch { /* empty */ }
+      await navigator.clipboard.writeText(text);
+      // emit a lightweight copy event (helps your analysis)
+      if (problemId) {
+        logEvent("chat_copy_code", {
+          problem_id: problemId,
+          n: (text || "").length,
+          lang
+        })
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1000);
+    } catch (e) {
+      console.warn("copy failed", e);
+    }
   }
 
   return (
     <div className='codewrap'>
       <div className='codehdr'>
         <span className='lang'>{lang}</span>
-        <button className='copybtn' onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+        <button
+          className='copybtn'
+          onClick={() => {
+            const text = Array.isArray(children) ? children.join('') : String(children ?? '')
+            copy(text, lang)
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
       </div>
       <pre className={className}><code ref={codeRef} {...props}>{children}</code></pre>
     </div>
@@ -172,7 +190,9 @@ export default function ChatPanel({ problem }) {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeHighlight]}
-                  components={{ code: CodeBlock }}
+                  components={{
+                    code: (mdProps) => <CodeBlock {...mdProps} problemId={meta.problem_id} />
+                  }}
                 >
                   {m.text}
                 </ReactMarkdown>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import ChatPanel from "../components/Chat/ChatPanel.jsx";
+import { logEvent } from '../lib/logger.js'
 
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
@@ -28,6 +29,16 @@ export default function TaskScreen({ testType = "fe" }) {
   const [submittedById, setSubmittedById] = useState({});
   const intervalRef = useRef(null);
   const iframeRef = useRef(null);
+
+  const firstPreviewById = useRef({}); // to emit first_preview once per problem
+
+  // lightweight debounce for code_change
+  const codeDebounceRef = useRef(null);
+  const debounce = (fn, ms = 350) => (...args) => {
+    clearTimeout(codeDebounceRef.current);
+    codeDebounceRef.current = setTimeout(() => fn(...args), ms);
+  };
+
 
   useEffect(() => {
     let cancelled = false;
@@ -55,20 +66,46 @@ export default function TaskScreen({ testType = "fe" }) {
     [sessionId, testType, active?.id]
   );
 
-  const runPreview = () => {
+  // ---------- manual run only + snapshot logging (FE only) ----------
+  const runPreview = async () => {
     if (!active) return;
-    if (iframeRef.current) iframeRef.current.srcdoc = codeById[active.id] || "";
+    const pid = active.id;
+    const code = codeById[pid] || "";
+    logEvent("run_click", { problem_id: pid });
+
+    // Only FE has preview snapshots
+    if (testType === "fe") {
+      try {
+        await fetch(`${API}/api/submissions/snapshots/fe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, problem_id: pid, code })
+        });
+      } catch { /* empty */ }
+    }
+    if (iframeRef.current) iframeRef.current.srcdoc = code;
+    logEvent("preview_refresh", { problem_id: pid });
+    if (!firstPreviewById.current[pid]) {
+      firstPreviewById.current[pid] = true;
+      logEvent("first_preview", { problem_id: pid });
+    }
   };
 
   const onEdit = (v) => {
     if (!active) return;
-    setCodeById(prev => ({ ...prev, [active.id]: v ?? "" }));
+    const next = v ?? "";
+    setCodeById(prev => ({ ...prev, [active.id]: next }));
+    // debounced code_change log (length only to keep it light)
+    debounce(() => {
+      logEvent("code_change", { problem_id: active.id, len: (next || "").length });
+    })();
   };
 
   const submit = async () => {
     if (!active) return;
     const pid = active.id;
     const code = codeById[pid] || "";
+    logEvent("submit_click", { problem_id: pid, size: code.length });
     try {
       const res = await fetch(`${API}/api/submissions/${testType}`, {
         method: "POST",
@@ -77,6 +114,7 @@ export default function TaskScreen({ testType = "fe" }) {
       });
       if (!res.ok) { alert("Submit failed. Try again."); return; }
       setSubmittedById(prev => ({ ...prev, [pid]: true }));
+      logEvent("submit_final", { problem_id: pid, size: code.length });
       alert("Submitted!");
     } catch (e) {
       console.warn("submit error", e);
@@ -86,15 +124,31 @@ export default function TaskScreen({ testType = "fe" }) {
 
   const goNext = () => {
     if (activeIdx < problems.length - 1) {
+    // task_leave for current problem
+    if (active) logEvent("task_leave", { problem_id: active.id });
       setActiveIdx(i => i + 1);
-      if (iframeRef.current) iframeRef.current.srcdoc = "";
     } else {
+    if (active) logEvent("task_leave", { problem_id: active.id });
+    logEvent("task_finish", { count: problems.length });
+      // all done → survey
       nav("../survey");
     }
   };
 
+  // defensive: leave event if user closes page mid-question
+  useEffect(() => {
+    const handler = () => {
+      if (active) logEvent("task_leave", { problem_id: active.id, reason: "unload" });
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [active?.id]);
+
   useEffect(() => {
     if (!active) return;
+    // task_enter when a question becomes active
+    logEvent("task_enter", { problem_id: active.id });
+
     clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       setTimeLeftById(prev => {
@@ -112,6 +166,7 @@ export default function TaskScreen({ testType = "fe" }) {
     const left = timeLeftById[active.id];
     if (left === 0 && lastTickRef.current[active.id] !== 0) {
       lastTickRef.current[active.id] = 0;
+      logEvent("auto_submit", { problem_id: active.id });
       (async () => {
         try {
           const pid = active.id;
@@ -121,6 +176,7 @@ export default function TaskScreen({ testType = "fe" }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ session_id: sessionId, problem_id: pid, code })
           });
+          logEvent("submit_final", { problem_id: pid, size: code.length, auto: true });
         } catch { /* noop */ }
         setSubmittedById(prev => ({ ...prev, [active.id]: true }));
         goNext();
