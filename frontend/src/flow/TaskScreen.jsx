@@ -2,8 +2,9 @@
 // src/screens/TaskScreen.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Editor from "@monaco-editor/react";
 import ChatPanel from "../components/Chat/ChatPanel.jsx";
+import FEWorkbench from "../components/workbench/FEWorkbench.jsx";
+import DVWorkbench from "../components/workbench/DVWorkbench.jsx";
 import { logEvent } from '../lib/logger.js'
 
 const THIRTY_MIN_MS = 30 * 60 * 1000;
@@ -27,6 +28,7 @@ export default function TaskScreen({ testType = "fe" }) {
   const [codeById, setCodeById] = useState({});
   const [timeLeftById, setTimeLeftById] = useState({});
   const [submittedById, setSubmittedById] = useState({});
+  const [dvOutputById, setDvOutputById] = useState({});
   const intervalRef = useRef(null);
   const iframeRef = useRef(null);
 
@@ -51,7 +53,10 @@ export default function TaskScreen({ testType = "fe" }) {
         setProblems(two);
         setActiveIdx(0);
         const timers = {}; const codes = {};
-        two.forEach(p => { timers[p.id] = THIRTY_MIN_MS; codes[p.id] = ""; });
+        two.forEach(p => { 
+          timers[p.id] = THIRTY_MIN_MS; 
+          codes[p.id] = p.starter_code || ""; 
+        });
         setTimeLeftById(timers);
         setCodeById(codes);
       } catch (e) {
@@ -279,49 +284,62 @@ export default function TaskScreen({ testType = "fe" }) {
           </div>
         </section>
 
-        {/* Workbench (HTML | divider | Preview) */}
+        {/* Workbench */}
         <section className="wb-card">
-          <div className="wb-grid" style={{ gridTemplateColumns: `${innerPct}% 8px ${100 - innerPct}%` }}>
-            {/* HTML */}
-            <div className="wb-pane">
-              <div className="wb-head">
-                <div className="wb-title">HTML</div>
-                <button className="btn" onClick={runPreview} disabled={submitted}>Run ▶</button>
-              </div>
-              <div className="wb-body">
-                <Editor
-                  height="100%"
-                  defaultLanguage="html"
-                  theme="vs-dark"
-                  value={code}
-                  onChange={onEdit}
-                  options={{
-                    fontSize: 14,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    wordWrap: "on",
-                    readOnly: submitted,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* inner divider */}
-            <div className="wb-divider" onMouseDown={startDragInner}>
-              <span className="grabber" />
-            </div>
-
-            {/* Preview */}
-            <div className="wb-pane">
-              <div className="wb-head">
-                <div className="wb-title">Preview</div>
-                <button className="btn" onClick={() => setIsFullscreen(true)}>Fullscreen ⤢</button>
-              </div>
-              <div className="wb-body">
-                <iframe ref={iframeRef} title="preview" sandbox="allow-scripts" />
-              </div>
-            </div>
-          </div>
+          {testType === 'fe' ? (
+            <FEWorkbench
+              code={code}
+              onEdit={onEdit}
+              onRun={runPreview}
+              isSubmitted={submitted}
+              onFullscreen={() => setIsFullscreen(true)}
+              innerPct={innerPct}
+              onDragInner={startDragInner}
+            />
+          ) : (
+            <DVWorkbench
+              code={code}
+              onEdit={onEdit}
+              onRun={async () => {
+                if (!active) return;
+                const pid = active.id;
+                logEvent("run_click", { problem_id: pid });
+                
+                try {
+                  const res = await fetch(`${API}/api/submissions/run/dv`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                      session_id: sessionId, 
+                      problem_id: pid, 
+                      code: code 
+                    })
+                  });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    throw new Error(data.detail || 'Run failed');
+                  }
+                  const { plot, stderr } = data;
+                  if (stderr) {
+                    alert(`Error: ${stderr}`);
+                  }
+                  setDvOutputById(prev => ({ ...prev, [pid]: plot }));
+                  
+                  if (!firstPreviewById.current[pid]) {
+                    firstPreviewById.current[pid] = true;
+                    logEvent("first_preview", { problem_id: pid });
+                  }
+                } catch (e) {
+                  console.error("Run error:", e);
+                  alert("Failed to run code. Please try again.");
+                }
+              }}
+              isSubmitted={submitted}
+              innerPct={innerPct}
+              onDragInner={startDragInner}
+              output={dvOutputById[active.id]}
+            />
+          )}
         </section>
         
       </div>

@@ -52,13 +52,53 @@ def problems_dv():
         {
             "id": "dv1",
             "type": "DV",
-            "title": "DV #1: Line chart",
-            "statement": "Plot a line chart."
+            "title": "DV #1: Temperature Trends",
+            "statement": """Create a line plot showing temperature trends over time.
+
+Sample data is provided below. Your task:
+1. Create a line plot using matplotlib
+2. Add proper title and axis labels
+3. Customize the line style and color
+4. Add a grid for better readability
+
+Use this starter code:""",
+            "starter_code": """import matplotlib.pyplot as plt
+import numpy as np
+
+# Sample data
+months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
+temperatures = [20, 22, 25, 27, 29, 31]
+
+# Your code here:
+plt.figure(figsize=(10, 6))
+# Create the line plot
+# Add labels and title
+# Customize the appearance"""
         },
         {
             "id": "dv2",
             "type": "DV",
-            "title": "DV #2: Bar chart",
-            "statement": "Compare categories."
+            "title": "DV #2: Sales Comparison",
+            "statement": """Create a bar chart comparing product sales.
+
+Your task:
+1. Create a bar chart showing sales by product
+2. Add value labels on top of each bar
+3. Use different colors for each category
+4. Add a legend and proper labels
+
+Use this starter code:""",
+            "starter_code": """import matplotlib.pyplot as plt
+import numpy as np
+
+# Sample data
+products = ['Laptop', 'Phone', 'Tablet', 'Watch']
+sales = [850, 1200, 400, 300]
+
+# Your code here:
+plt.figure(figsize=(10, 6))
+# Create the bar chart
+# Add value labels
+# Customize colors and add legend"""
         }
     ]
