@@ -40,8 +40,12 @@ class GeminiProvider:
             else:
                 resp = model.generate_content(self._to_chat(messages), stream=True)
             for ev in resp:
-                if getattr(ev, "text", None):
-                    yield ev.text
+                try:
+                    if chunk := getattr(ev, "text", None):
+                        yield chunk
+                except ValueError:
+                    # Skip any problematic chunks but continue streaming
+                    continue
 
         loop = asyncio.get_event_loop()
         q: asyncio.Queue[str] = asyncio.Queue()

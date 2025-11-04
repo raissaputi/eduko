@@ -15,18 +15,24 @@ function CodeBlock({ inline, className, children, problemId, ...props }) {
   if (inline) return <code className={className} {...props}>{children}</code>
   const codeRef = useRef(null)
   const [copied, setCopied] = useState(false)
-  const lang =
-    (className?.match(/language-([\w+-]+)/)?.[1]) ||
-    (className?.split(' ').find(s => s !== 'hljs') || 'text')
+  const lang = className?.match(/language-([\w+-]+)/)?.[1]
+
+  // Only render as a code block if it's a programming language
+  if (!lang) {
+    return <code className={className} {...props}>{children}</code>
+  }
 
   const copy = async (text, lang = "text") => {
     try {
-      await navigator.clipboard.writeText(text);
-      // emit a lightweight copy event (helps your analysis)
+      // Get the actual text content from the code element
+      const codeElement = codeRef.current;
+      const textContent = codeElement ? codeElement.textContent : '';
+      
+      await navigator.clipboard.writeText(textContent);
       if (problemId) {
         logEvent("chat_copy_code", {
           problem_id: problemId,
-          n: (text || "").length,
+          n: textContent.length,
           lang
         })
       }
@@ -43,10 +49,7 @@ function CodeBlock({ inline, className, children, problemId, ...props }) {
         <span className='lang'>{lang}</span>
         <button
           className='copybtn'
-          onClick={() => {
-            const text = Array.isArray(children) ? children.join('') : String(children ?? '')
-            copy(text, lang)
-          }}
+          onClick={() => copy(children, lang)}
         >
           {copied ? 'Copied' : 'Copy'}
         </button>
@@ -191,8 +194,18 @@ export default function ChatPanel({ problem }) {
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeHighlight]}
                   components={{
-                    code: (mdProps) => <CodeBlock {...mdProps} problemId={meta.problem_id} />
+                    code: ({inline, className, children, ...props}) => {
+                      // If it's inline code and doesn't have a language class, render as inline
+                      if (inline && !className) {
+                        return <code className="inline-code" {...props}>{children}</code>
+                      }
+                      // Otherwise use the CodeBlock component for code blocks
+                      return <CodeBlock inline={inline} className={className} problemId={meta.problem_id} {...props}>{children}</CodeBlock>
+                    },
+                    p: ({children}) => <p style={{whiteSpace: 'pre-wrap'}}>{children}</p>
                   }}
+                  skipHtml={false}
+                  unwrapDisallowed={false}
                 >
                   {m.text}
                 </ReactMarkdown>
