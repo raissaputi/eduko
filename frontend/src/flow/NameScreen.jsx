@@ -10,7 +10,7 @@ export default function NameScreen({ testType }) {
     if (!name.trim()) return;
     const res = await fetch(`${API}/api/session/start`, {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, test: testType })
     });
     if (!res.ok) { alert("Could not start session."); return; }
@@ -22,14 +22,17 @@ export default function NameScreen({ testType }) {
   }
 
   return (
-    <section className="card vstack">
-      <div className="title">{testType.toUpperCase()} – Participant Info</div>
-      <div className="subtle">Enter your name to begin.</div>
-      <input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" />
-      <div className="toolbar">
-        <div className="spacer" />
-        <button className="btn primary" onClick={start} disabled={!name.trim()}>Continue</button>
-      </div>
-    </section>
+    <div className="page">
+      <section className="card vstack">
+        <div className="title">{testType.toUpperCase()} - Participant Info</div>
+        <div className="subtle">Enter your name to begin.</div>
+        <input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" />
+        <div className="toolbar">
+          <div className="spacer" />
+          <button className="btn primary" onClick={start} disabled={!name.trim()}>Continue</button>
+        </div>
+      </section>
+    </div>
   );
 }
+

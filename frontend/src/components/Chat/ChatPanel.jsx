@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github-dark.css'
-import { logEvent } from '../../lib/logger'   // ← adjust if your path differs
+import { logEvent } from '../../lib/logger'
 import "github-markdown-css/github-markdown-dark.css"
 import rehypeSanitize from 'rehype-sanitize'
 
@@ -24,19 +24,13 @@ function CodeBlock({ inline, className, children, problemId, ...props }) {
     return <code className={className} {...props}>{children}</code>
   }
 
-  const copy = async (text, lang = "text") => {
+  const copy = async (_text, lang = "text") => {
     try {
-      // Get the actual text content from the code element
       const codeElement = codeRef.current;
       const textContent = codeElement ? codeElement.textContent : '';
-      
       await navigator.clipboard.writeText(textContent);
       if (problemId) {
-        logEvent("chat_copy_code", {
-          problem_id: problemId,
-          n: textContent.length,
-          lang
-        })
+        logEvent("chat_copy_code", { problem_id: problemId, n: textContent.length, lang })
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 1000);
@@ -49,10 +43,7 @@ function CodeBlock({ inline, className, children, problemId, ...props }) {
     <div className='codewrap'>
       <div className='codehdr'>
         <span className='lang'>{lang}</span>
-        <button
-          className='copybtn'
-          onClick={() => copy(children, lang)}
-        >
+        <button className='copybtn' onClick={() => copy(children, lang)}>
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
@@ -97,24 +88,14 @@ export default function ChatPanel({ problem }) {
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
 
-    ws.onopen = () => {
-      setOnline(true)
-      logEvent('chat_ws_open', { url: WS_URL })
-    }
-    ws.onclose = () => {
-      setOnline(false)
-      logEvent('chat_ws_close', {})
-    }
-    ws.onerror = () => {
-      setOnline(false)
-      logEvent('chat_ws_error', {})
-    }
+    ws.onopen = () => { setOnline(true); logEvent('chat_ws_open', { url: WS_URL }) }
+    ws.onclose = () => { setOnline(false); logEvent('chat_ws_close', {}) }
+    ws.onerror = () => { setOnline(false); logEvent('chat_ws_error', {}) }
 
     ws.onmessage = ev => {
       try {
         const msg = JSON.parse(ev.data)
         if (msg.type === 'token') {
-          // stream token into the last assistant message or create one
           setMessages(prev => {
             const last = prev[prev.length - 1]
             if (last?.role === 'assistant' && last.streaming) {
@@ -137,11 +118,10 @@ export default function ChatPanel({ problem }) {
           })
           logEvent('chat_done', { problem_id: meta.problem_id })
         } else if (msg.type === 'error') {
-          setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: '⚠ ' + msg.error }])
+          setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: 'Error: ' + msg.error }])
           logEvent('chat_error', { problem_id: meta.problem_id, error: msg.error })
         }
-      // eslint-disable-next-line no-unused-vars
-      } catch (e) {
+      } catch (_e) {
         logEvent('chat_error', { problem_id: meta.problem_id, error: 'parse_error' })
       }
     }
@@ -163,7 +143,6 @@ export default function ChatPanel({ problem }) {
 
     if (online && wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ message: content, ...meta }))
-      // create a placeholder streaming msg
       setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: '', streaming: true }])
     } else {
       fetch(`${API}/api/chat`, {
@@ -181,82 +160,69 @@ export default function ChatPanel({ problem }) {
   }
 
   const onKey = e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
   return (
-
-      <div className="chat-root">
-        <div ref={scrollRef} className='chat-scroll'>
-          {messages.map(m => (
-            <div key={m.id} className={`row ${m.role}`}>
-              <div className={`bubble ${m.role}`}>
-                <article className="markdown-body chat-md">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight, rehypeSanitize]}
-                    components={{
-                      code: ({ inline, className, children, ...props }) => {
-                        // inline code → styled small snippet
-                        if (inline && !className) {
-                          return (
-                            <code className="inline-code" {...props}>
-                              {children}
-                            </code>
-                          )
-                        }
-                        // block code → use your copyable CodeBlock component
+    <div className="chat-root">
+      <div ref={scrollRef} className='chat-scroll'>
+        {messages.map(m => (
+          <div key={m.id} className={`row ${m.role}`}>
+            <div className={`bubble ${m.role}`}>
+              <article className="markdown-body chat-md">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight, rehypeSanitize]}
+                  components={{
+                    code: ({ inline, className, children, ...props }) => {
+                      if (inline && !className) {
                         return (
-                          <CodeBlock
-                            inline={inline}
-                            className={className}
-                            problemId={meta.problem_id}
-                            {...props}
-                          >
-                            {children}
-                          </CodeBlock>
+                          <code className="inline-code" {...props}>{children}</code>
                         )
-                      },
-                    }}
-                  >
-                    {m.text}
-                  </ReactMarkdown>
-                </article>
-
-                {m.streaming && <span className="cursor">▍</span>}
-              </div>
+                      }
+                      return (
+                        <CodeBlock inline={inline} className={className} problemId={meta.problem_id} {...props}>
+                          {children}
+                        </CodeBlock>
+                      )
+                    },
+                  }}
+                >
+                  {m.text}
+                </ReactMarkdown>
+              </article>
+              {m.streaming && <span className="cursor">▍</span>}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
+      </div>
 
-        <div className='chat-input'>
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={onKey}
-            placeholder='Ask anything...'
-            disabled={isStreaming}
-          />
-          <button 
-            onClick={send}
-            disabled={isStreaming || !input.trim()}
-            title={isStreaming ? "Stop" : "Send"}
-          >
-            {isStreaming ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="6" y="6" width="12" height="12" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 2L11 13" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-              </svg>
-            )}
-          </button>
-        </div>
+      <div className='chat-input'>
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={onKey}
+          placeholder='Ask anything...'
+          disabled={isStreaming}
+        />
+        <button 
+          onClick={send}
+          disabled={isStreaming || !input.trim()}
+          title={isStreaming ? "Stop" : "Send"}
+        >
+          {isStreaming ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="6" y="6" width="12" height="12" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 2L11 13" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   )
 }
+
