@@ -178,11 +178,12 @@ body{
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 12px;
   border-top: 1px solid var(--border);
   background: var(--surface-2);
   position: sticky;
   bottom: 0;
+  box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .chat-input textarea {
@@ -190,35 +191,60 @@ body{
   background: var(--surface);
   color: var(--text);
   border-radius: 10px;
-  padding: 12px 14px;
-  min-height: 46px;
+  padding: 8px 12px;
+  height: 40px;
   max-height: 150px;
-  resize: vertical;
+  resize: none;
   outline: none;
   font-family: inherit;
   font-size: 14px;
   line-height: 1.5;
+  transition: all 0.2s ease;
+}
+
+.chat-input textarea:hover {
+  border-color: rgba(30, 144, 255, 0.3);
+  background: rgba(30, 144, 255, 0.03);
 }
 
 .chat-input textarea:focus {
   border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(30, 144, 255, 0.1);
 }
 
 .chat-input button {
   align-self: end;
-  height: 46px;
-  padding: 0 20px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border-radius: 10px;
   border: none;
   background: var(--accent);
   color: #fff;
-  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.chat-input button:hover {
-  opacity: 0.9;
+.chat-input button svg {
+  transition: transform 0.2s ease;
+}
+
+.chat-input button:not(:disabled):hover {
+  background: #1a7ee6;
+}
+
+.chat-input button:not(:disabled):hover svg {
+  transform: scale(1.1);
+}
+
+.chat-input button:disabled {
+  background: #2a2a33;
+  cursor: not-allowed;
+  color: #666;
 }
 
 /* Messages */

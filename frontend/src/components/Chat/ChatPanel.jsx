@@ -149,9 +149,11 @@ export default function ChatPanel({ problem }) {
     return () => ws.close()
   }, [meta.problem_id])
 
+  const isStreaming = messages.some(m => m.streaming)
+
   const send = () => {
     const content = input.trim()
-    if (!content) return
+    if (!content || isStreaming) return
 
     const userMsg = { id: crypto.randomUUID(), role: 'user', text: content }
     setMessages(p => [...p, userMsg])
@@ -236,8 +238,24 @@ export default function ChatPanel({ problem }) {
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKey}
             placeholder='Ask anything...'
+            disabled={isStreaming}
           />
-          <button onClick={send}>Send</button>
+          <button 
+            onClick={send}
+            disabled={isStreaming || !input.trim()}
+            title={isStreaming ? "Stop" : "Send"}
+          >
+            {isStreaming ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="6" y="6" width="12" height="12" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+            )}
+          </button>
         </div>
     </div>
   )
