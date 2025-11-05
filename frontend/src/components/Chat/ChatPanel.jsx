@@ -6,6 +6,8 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github-dark.css'
 import { logEvent } from '../../lib/logger'   // ← adjust if your path differs
+import "github-markdown-css/github-markdown-dark.css"
+import rehypeSanitize from 'rehype-sanitize'
 
 const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const WS_URL = (API.replace('http', 'ws') + '/ws/chat').replace(/\/+$/, '')
@@ -190,26 +192,39 @@ export default function ChatPanel({ problem }) {
           {messages.map(m => (
             <div key={m.id} className={`row ${m.role}`}>
               <div className={`bubble ${m.role}`}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
-                  components={{
-                    code: ({inline, className, children, ...props}) => {
-                      // If it's inline code and doesn't have a language class, render as inline
-                      if (inline && !className) {
-                        return <code className="inline-code" {...props}>{children}</code>
-                      }
-                      // Otherwise use the CodeBlock component for code blocks
-                      return <CodeBlock inline={inline} className={className} problemId={meta.problem_id} {...props}>{children}</CodeBlock>
-                    },
-                    p: ({children}) => <p style={{whiteSpace: 'pre-wrap'}}>{children}</p>
-                  }}
-                  skipHtml={false}
-                  unwrapDisallowed={false}
-                >
-                  {m.text}
-                </ReactMarkdown>
-                {m.streaming && <span className='cursor'>▍</span>}
+                <article className="markdown-body chat-md">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight, rehypeSanitize]}
+                    components={{
+                      code: ({ inline, className, children, ...props }) => {
+                        // inline code → styled small snippet
+                        if (inline && !className) {
+                          return (
+                            <code className="inline-code" {...props}>
+                              {children}
+                            </code>
+                          )
+                        }
+                        // block code → use your copyable CodeBlock component
+                        return (
+                          <CodeBlock
+                            inline={inline}
+                            className={className}
+                            problemId={meta.problem_id}
+                            {...props}
+                          >
+                            {children}
+                          </CodeBlock>
+                        )
+                      },
+                    }}
+                  >
+                    {m.text}
+                  </ReactMarkdown>
+                </article>
+
+                {m.streaming && <span className="cursor">▍</span>}
               </div>
             </div>
           ))}

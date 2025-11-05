@@ -257,47 +257,16 @@ body{
   overflow-x: visible;
 }
 
-/* Code blocks in assistant messages */
-.bubble.assistant pre {
-  margin: 12px 0;
-  background: var(--surface-2) !important;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  overflow-x: auto;
-  width: 100%;
+/* Let GitHub markdown render everything inside */
+.bubble.assistant .markdown-body {
+  background: transparent;
+  color: var(--text);
 }
 
-.bubble.assistant code {
-  font-size: 13px;
-  padding: 12px 16px;
-  tab-size: 2;
-  display: block;
-  overflow-x: auto;
-  width: 100%;
-  box-sizing: border-box;
-}
+/* Optional: theme-friendly links and spacing */
+.bubble.assistant .markdown-body a { color: var(--accent); }
+.bubble.assistant .markdown-body pre { margin: 12px 0; }
 
-.bubble.assistant p {
-  margin: 0 0 12px;
-  overflow-wrap: break-word;
-  max-width: 100%;
-  white-space: pre-wrap;
-}
-
-.bubble.assistant p:last-child {
-  margin-bottom: 0;
-}
-
-.bubble.assistant code.inline-code {
-  background: var(--surface-2);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.9em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  white-space: normal;
-  display: inline;
-  word-break: break-word;
-}
 
 .bubble.assistant ul, 
 .bubble.assistant ol {
