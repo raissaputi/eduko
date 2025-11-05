@@ -240,12 +240,15 @@ body{
 
 .bubble.user {
   max-width: 85%;
-  background: #1e2533;
-  border: 1px solid #2a3245;
-  border-radius: 14px;
-  padding: 10px 12px;
+  background: #2c3e50;
+  border: 1px solid #34495e;
+  border-radius: 16px;
+  padding: 12px 16px;
   white-space: pre-wrap;
   line-height: 1.5;
+  font-size: 14px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  color: #ecf0f1;
 }
 
 .bubble.assistant {
@@ -255,17 +258,54 @@ body{
   padding: 0;
   border: none;
   overflow-x: visible;
+  font-size: 14px;
 }
 
-/* Let GitHub markdown render everything inside */
+/* Reset GitHub markdown styles and customize */
+.chat-root .markdown-body {
+  background: transparent !important;
+  color: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.chat-root article.markdown-body {
+  background: transparent !important;
+}
+
 .bubble.assistant .markdown-body {
-  background: transparent;
-  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  background: transparent !important;
 }
 
-/* Optional: theme-friendly links and spacing */
+/* Theme-friendly styling */
 .bubble.assistant .markdown-body a { color: var(--accent); }
-.bubble.assistant .markdown-body pre { margin: 12px 0; }
+.bubble.assistant .markdown-body pre { 
+  margin: 0; 
+  background: var(--surface-2) !important;
+  border: none;
+}
+
+.bubble.assistant .markdown-body code {
+  font-size: 13.5px;
+  padding: 16px 18px;
+  tab-size: 2;
+  line-height: 1.6;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.bubble.assistant .markdown-body p code,
+.bubble.assistant .markdown-body li code,
+.bubble.assistant .markdown-body td code {
+  background: rgba(86, 88, 105, 0.4) !important;
+  color: #e3e3e5 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 0.92em !important;
+  font-weight: 500 !important;
+  border: none !important;
+}
 
 
 .bubble.assistant ul, 
@@ -308,37 +348,45 @@ body{
 /* Code block header */
 .codewrap {
   position: relative;
-  margin: 12px 0;
+  margin: 16px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: var(--surface-2);
 }
 
 .codehdr {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
 }
 
 .codehdr .lang {
   color: var(--text-dim);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .codehdr .copybtn {
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 12px;
-  border: none;
-  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-dim);
   cursor: pointer;
-  transition: color 0.2s;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  font-weight: 500;
 }
 
 .codehdr .copybtn:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
