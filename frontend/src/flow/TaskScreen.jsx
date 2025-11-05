@@ -160,6 +160,25 @@ export default function TaskScreen({ testType = "fe" }) {
     }
   };
 
+  const markStepCompleted = (step) => {
+    const sessionId = sessionStorage.getItem('session_id');
+    if (!sessionId) return;
+    
+    try {
+      const stored = sessionStorage.getItem(`flow_state_${sessionId}`);
+      const state = stored ? JSON.parse(stored) : { completedSteps: [], currentMaxStep: 'name' };
+      
+      if (!state.completedSteps.includes(step)) {
+        state.completedSteps.push(step);
+      }
+      state.currentMaxStep = 'survey';
+      
+      sessionStorage.setItem(`flow_state_${sessionId}`, JSON.stringify(state));
+    } catch (e) {
+      console.warn('Failed to update flow state:', e);
+    }
+  };
+
   const goNext = () => {
     if (activeIdx < problems.length - 1) {
     // task_leave for current problem
@@ -168,6 +187,8 @@ export default function TaskScreen({ testType = "fe" }) {
     } else {
     if (active) logEvent("task_leave", { problem_id: active.id });
     logEvent("task_finish", { count: problems.length });
+      // mark task as completed before moving to survey
+      markStepCompleted('task');
       // all done → survey
       nav("../survey");
     }

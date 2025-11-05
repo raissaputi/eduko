@@ -18,6 +18,14 @@ export default function NameScreen({ testType }) {
     sessionStorage.setItem("session_id", data.session_id);
     sessionStorage.setItem("name", name);
     sessionStorage.setItem("testType", testType);
+    
+    // Initialize flow state
+    const flowState = {
+      completedSteps: ['name'],
+      currentMaxStep: 'consent'
+    };
+    sessionStorage.setItem(`flow_state_${data.session_id}`, JSON.stringify(flowState));
+    
     nav("../consent");
   }
 
