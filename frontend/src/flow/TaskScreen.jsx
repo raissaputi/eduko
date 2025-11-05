@@ -41,6 +41,28 @@ export default function TaskScreen({ testType = "fe" }) {
     codeDebounceRef.current = setTimeout(() => fn(...args), ms);
   };
 
+  // Code persistence helpers
+  const getCodeStorageKey = (problemId) => {
+    return `code_${sessionId}_${testType}_${problemId}`;
+  };
+
+  const saveCodeToStorage = (problemId, code) => {
+    try {
+      sessionStorage.setItem(getCodeStorageKey(problemId), code);
+    } catch (e) {
+      console.warn('Failed to save code:', e);
+    }
+  };
+
+  const loadCodeFromStorage = (problemId) => {
+    try {
+      return sessionStorage.getItem(getCodeStorageKey(problemId)) || null;
+    } catch (e) {
+      console.warn('Failed to load code:', e);
+      return null;
+    }
+  };
+
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +77,9 @@ export default function TaskScreen({ testType = "fe" }) {
         const timers = {}; const codes = {};
         two.forEach(p => { 
           timers[p.id] = THIRTY_MIN_MS; 
-          codes[p.id] = p.starter_code || ""; 
+          // Check for saved code first, fallback to starter_code
+          const savedCode = loadCodeFromStorage(p.id);
+          codes[p.id] = savedCode || p.starter_code || ""; 
         });
         setTimeLeftById(timers);
         setCodeById(codes);
@@ -65,6 +89,15 @@ export default function TaskScreen({ testType = "fe" }) {
     })();
     return () => { cancelled = true; };
   }, [API, testType]);
+
+  // Save code changes to sessionStorage
+  useEffect(() => {
+    Object.entries(codeById).forEach(([problemId, code]) => {
+      if (code !== undefined && code !== null) {
+        saveCodeToStorage(problemId, code);
+      }
+    });
+  }, [codeById]);
 
   const threadId = useMemo(
     () => (active ? `${sessionId}:${testType}:${active.id}` : null),
@@ -353,7 +386,7 @@ export default function TaskScreen({ testType = "fe" }) {
       <aside className="chat-col">
         <div className="pane-head"><h3>Assistant</h3></div>
         <div className="pane-body">
-          <ChatPanel key={active.id} problem={active} threadId={threadId} />
+          <ChatPanel problem={active} threadId={threadId} />
         </div>
       </aside>
     </div>

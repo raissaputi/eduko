@@ -59,6 +59,30 @@ export default function ChatPanel({ problem }) {
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
 
+  // Chat persistence helpers
+  const getChatKey = () => {
+    const sessionId = sessionStorage.getItem('session_id') || 'anon'
+    return `chat_messages_${sessionId}_${problem?.id || 'global'}`
+  }
+
+  const saveChatMessages = (msgs) => {
+    try {
+      sessionStorage.setItem(getChatKey(), JSON.stringify(msgs))
+    } catch (e) {
+      console.warn('Failed to save chat messages:', e)
+    }
+  }
+
+  const loadChatMessages = () => {
+    try {
+      const stored = sessionStorage.getItem(getChatKey())
+      return stored ? JSON.parse(stored) : []
+    } catch (e) {
+      console.warn('Failed to load chat messages:', e)
+      return []
+    }
+  }
+
   const meta = useMemo(() => ({
     session_id: sessionStorage.getItem('session_id') || 'anon',
     problem_id: problem?.id ?? null,
@@ -76,6 +100,19 @@ export default function ChatPanel({ problem }) {
     }
     return false
   }
+
+  // Load messages for current problem on mount/problem change
+  useEffect(() => {
+    const savedMessages = loadChatMessages()
+    setMessages(savedMessages)
+  }, [problem?.id])
+
+  // Save messages to sessionStorage whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveChatMessages(messages)
+    }
+  }, [messages])
 
   // autoscroll
   useEffect(() => {
