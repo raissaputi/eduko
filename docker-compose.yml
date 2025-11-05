@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: research-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app:rw
+    environment:
+      - PYTHONPATH=/app
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: research-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app:rw
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    depends_on:
+      - backend
+    restart: unless-stopped
