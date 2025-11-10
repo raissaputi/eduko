@@ -58,6 +58,7 @@ export default function ChatPanel({ problem }) {
   const [online, setOnline] = useState(false)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
+  const textareaRef = useRef(null)
 
   // Chat persistence helpers
   const getChatKey = () => {
@@ -163,6 +164,12 @@ export default function ChatPanel({ problem }) {
     const userMsg = { id: crypto.randomUUID(), role: 'user', text: content }
     setMessages(p => [...p, userMsg])
     setInput('')
+    
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '44px'
+      textareaRef.current.style.overflowY = 'hidden'
+    }
 
     logEvent('chat_send', { problem_id: meta.problem_id, prompt_len: content.length })
 
@@ -194,28 +201,32 @@ export default function ChatPanel({ problem }) {
         {messages.map(m => (
           <div key={m.id} className={`row ${m.role}`}>
             <div className={`bubble ${m.role}`}>
-              <article className="markdown-body chat-md">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight, rehypeSanitize]}
-                  components={{
-                    code: ({ inline, className, children, ...props }) => {
-                      if (inline && !className) {
+              {m.role === 'assistant' ? (
+                <article className="markdown-body chat-md">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight, rehypeSanitize]}
+                    components={{
+                      code: ({ inline, className, children, ...props }) => {
+                        if (inline && !className) {
+                          return <code className="inline-code" {...props}>{children}</code>
+                        }
                         return (
-                          <code className="inline-code" {...props}>{children}</code>
+                          <CodeBlock inline={inline} className={className} problemId={meta.problem_id} {...props}>
+                            {children}
+                          </CodeBlock>
                         )
-                      }
-                      return (
-                        <CodeBlock inline={inline} className={className} problemId={meta.problem_id} {...props}>
-                          {children}
-                        </CodeBlock>
-                      )
-                    },
-                  }}
-                >
+                      },
+                    }}
+                  >
+                    {m.text}
+                  </ReactMarkdown>
+                </article>
+              ) : (
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
                   {m.text}
-                </ReactMarkdown>
-              </article>
+                </pre>
+              )}
               {m.streaming && <span className="cursor">▍</span>}
             </div>
           </div>
@@ -224,11 +235,25 @@ export default function ChatPanel({ problem }) {
 
       <div className='chat-input'>
         <textarea
+          ref={textareaRef}
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => {
+            setInput(e.target.value);
+            // Auto-grow logic
+            e.target.style.height = 'auto';
+            const maxHeight = 200;
+            const scrollHeight = e.target.scrollHeight;
+            e.target.style.height = Math.min(scrollHeight, maxHeight) + 'px';
+            // Enable/disable scrolling based on content height
+            e.target.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+          }}
           onKeyDown={onKey}
           placeholder='Ask anything...'
           disabled={isStreaming}
+          style={{
+            minHeight: '44px',
+            maxHeight: '200px',
+          }}
         />
         <button 
           onClick={send}
