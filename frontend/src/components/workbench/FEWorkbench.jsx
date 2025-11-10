@@ -34,6 +34,15 @@ export default function FEWorkbench({
             theme="vs-dark"
             value={code}
             onChange={onEdit}
+            onMount={(editor) => {
+              editor.onDidPaste((e) => {
+                const text = editor.getModel().getValueInRange(e);
+                logEvent("code_paste", { 
+                  len: text.length,
+                  kind: 'fe'
+                });
+              });
+            }}
             options={{
               fontSize: 14,
               minimap: { enabled: false },

@@ -90,18 +90,7 @@ export default function ChatPanel({ problem }) {
     problem_statement: problem?.statement ?? null
   }), [problem])
 
-  // throttle token logging
-  const lastTokLogRef = useRef(0)
-  const shouldLogToken = () => {
-    const now = performance.now()
-    if (now - lastTokLogRef.current > 500) {
-      lastTokLogRef.current = now
-      return true
-    }
-    return false
-  }
-
-  // Load messages for current problem on mount/problem change
+  // autoscroll
   useEffect(() => {
     const savedMessages = loadChatMessages()
     setMessages(savedMessages)
@@ -142,7 +131,6 @@ export default function ChatPanel({ problem }) {
             }
             return [...prev, { id: crypto.randomUUID(), role: 'assistant', text: msg.text, streaming: true }]
           })
-          if (shouldLogToken()) logEvent('chat_token', { problem_id: meta.problem_id, n: msg.text?.length || 0 })
         } else if (msg.type === 'done') {
           setMessages(prev => {
             const last = prev[prev.length - 1]
@@ -185,7 +173,7 @@ export default function ChatPanel({ problem }) {
       fetch(`${API}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, ...meta })
+        body: JSON.stringify({ message: content, session_id: meta.session_id, ...meta })
       })
         .then(r => r.json())
         .then(data => setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: data.reply }]))

@@ -218,7 +218,17 @@ def append_event(session_id: str, record: Dict[str, Any]) -> None:
 def append_chat_raw(session_id: str, record: Dict[str, Any]) -> None:
     """
     Append a raw chat turn/response to:
+      data/sessions/<sid>/problems/<problem_id>/chat.jsonl
+    If no problem_id is specified, stores in:
       data/sessions/<sid>/raw/chat.jsonl
     """
-    chat_path = raw_dir(session_id) / "chat.jsonl"
+    problem_id = record.get("problem_id")
+    if problem_id:
+        # Store under problems/<pid>/chat.jsonl
+        base_dir = raw_dir(session_id).parent / "problems" / str(problem_id)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        chat_path = base_dir / "chat.jsonl"
+    else:
+        # Fallback to raw/chat.jsonl for chats without problem context
+        chat_path = raw_dir(session_id) / "chat.jsonl"
     append_jsonl(chat_path, record)

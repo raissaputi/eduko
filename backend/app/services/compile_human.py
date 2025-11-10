@@ -20,10 +20,49 @@ DATA_ROOT = Path("data/sessions")
 
 # ---------- Public API ----------
 
+def _compile_chat_file(chat_path: Path, out_path: Path) -> None:
+    """Compile one chat.jsonl file into human readable format."""
+    if not chat_path.exists():
+        return
+        
+    lines = []
+    # Read and sort all chats by timestamp
+    chats = []
+    with chat_path.open() as f:
+        for line in f:
+            try:
+                chat = json.loads(line)
+                chats.append(chat)
+            except Exception:
+                continue
+    chats.sort(key=lambda x: x.get("client_ts", 0))
+    
+    # Process each chat
+    for chat in chats:
+        ts = _fmt_ts(chat.get("client_ts", 0))
+        chat_id = chat.get("id", "unknown")
+        problem = f" (Problem: {chat['problem_id']})" if chat.get("problem_id") else ""
+        
+        lines.extend([
+            f"\n[{ts}] Chat {chat_id}{problem}",
+            "User: " + chat.get("prompt", "(no prompt)"),
+            "Assistant: " + chat.get("response", "(no response)"),
+            ""
+        ])
+    
+    # Write output if we have content
+    if lines:
+        out_path.write_text("\n".join(lines))
+
 def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple[Path, Dict[str, Path]]:
     """
-    Build a readable full log for a session and (optionally) per-problem logs.
-    Returns (full_log_path, {problem_id: path})
+    Build readable logs for a session:
+    - Full event log (log.txt)
+    - Per-problem event logs (log_problem_*.txt)
+    - Full chat log (log_chat.txt)
+    - Per-problem chat logs (log_chat_*.txt)
+    
+    Returns (full_log_path, {problem_id: event_log_path})
     """
     base = DATA_ROOT / session_id
     src = base / "raw" / "events.jsonl"
@@ -51,7 +90,7 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
     dst.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"[✓] Compiled human log: {dst}")
 
-    # split-by-problem
+    # split events by problem
     per_paths: Dict[str, Path] = {}
     if split_by_problem:
         grouped: Dict[str, List[str]] = {}
@@ -65,9 +104,32 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
             ppath = base / f"log_problem_{pid}.txt"
             ppath.write_text("\n".join(plines) + "\n", encoding="utf-8")
             per_paths[pid] = ppath
+
         if per_paths:
             ids = ", ".join(sorted(per_paths.keys(), key=lambda x: str(x)))
-            print(f"[✓] Per-problem logs: {ids}")
+            print(f"[✓] Per-problem event logs: {ids}")
+
+    # compile chat logs
+    problems_dir = base / "problems"
+    if problems_dir.exists():
+        # compile problem-specific chats
+        for problem_dir in problems_dir.iterdir():
+            if not problem_dir.is_dir():
+                continue
+                
+            chat_path = problem_dir / "chat.jsonl"
+            if chat_path.exists():
+                problem_id = problem_dir.name
+                out_path = base / f"log_chat_{problem_id}.txt"
+                _compile_chat_file(chat_path, out_path)
+                print(f"[✓] Compiled chat log for problem {problem_id}")
+    
+    # compile general chats (without problem context)
+    general_chat = base / "raw" / "chat.jsonl"
+    if general_chat.exists():
+        out_path = base / "log_chat.txt"
+        _compile_chat_file(general_chat, out_path)
+        print(f"[✓] Compiled general chat log")
 
     return dst, per_paths
 
@@ -137,14 +199,13 @@ def _summarize_event(etype: str, p: Dict[str, Any]) -> str:
         b = p.get("bytes")
         return f"problem={pid} bytes={b}"
     if etype.startswith("chat_prompt"):
-        q = str(p.get("prompt", ""))
+        chat_id = p.get("chat_id", "")
         pid = p.get("problem_id")
-        tail = f"prompt=\"{q[:50]}...\"" if q else "prompt"
-        return (f"problem={pid} " if pid is not None else "") + tail
+        return f"problem={pid} chat={chat_id}" if pid else f"chat={chat_id}"
     if etype.startswith("chat_response"):
+        chat_id = p.get("chat_id", "")
         pid = p.get("problem_id")
-        out = p.get("tokens_out")
-        return (f"problem={pid} " if pid is not None else "") + (f"tokens={out}" if out is not None else "response")
+        return f"problem={pid} chat={chat_id}" if pid else f"chat={chat_id}"
     if etype in {"task_leave"}:
         return f"problem={p.get('problem_id')}"
 

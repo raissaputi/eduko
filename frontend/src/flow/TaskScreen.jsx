@@ -135,7 +135,11 @@ export default function TaskScreen({ testType = "fe" }) {
     setCodeById(prev => ({ ...prev, [active.id]: next }));
     // debounced code_change log (length only to keep it light)
     debounce(() => {
-      logEvent("code_change", { problem_id: active.id, len: (next || "").length });
+      logEvent("code_change", { 
+        problem_id: active.id, 
+        len: (next || "").length,
+        kind: testType
+      });
     })();
   };
 
