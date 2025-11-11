@@ -1,29 +1,27 @@
 import { Routes, Route, Navigate, useParams, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import NameScreen from "./NameScreen.jsx";
-import ConsentScreen from "./ConsentScreen.jsx";
 import TaskScreen from "./TaskScreen.jsx";
 import SurveyScreen from "./SurveyScreen.jsx";
 import FinishScreen from "./FinishScreen.jsx";
 
 // Flow step order and validation
 const FLOW_STEPS = {
-  name: { order: 1, next: 'consent' },
-  consent: { order: 2, next: 'task', requires: ['name'] },
-  task: { order: 3, next: 'survey', requires: ['name', 'consent'] },
-  survey: { order: 4, next: 'finish', requires: ['name', 'consent', 'task'] },
-  finish: { order: 5, requires: ['name', 'consent', 'task', 'survey'] }
+  info: { order: 1, next: 'task' },
+  task: { order: 2, next: 'survey', requires: ['info'] },
+  survey: { order: 3, next: 'finish', requires: ['info', 'task'] },
+  finish: { order: 4, requires: ['info', 'task', 'survey'] }
 };
 
 function getFlowState() {
   const sessionId = sessionStorage.getItem('session_id');
-  if (!sessionId) return { completedSteps: [], currentMaxStep: 'name' };
+  if (!sessionId) return { completedSteps: [], currentMaxStep: 'info' };
   
   try {
     const stored = sessionStorage.getItem(`flow_state_${sessionId}`);
-    return stored ? JSON.parse(stored) : { completedSteps: [], currentMaxStep: 'name' };
+  return stored ? JSON.parse(stored) : { completedSteps: [], currentMaxStep: 'info' };
   } catch {
-    return { completedSteps: [], currentMaxStep: 'name' };
+  return { completedSteps: [], currentMaxStep: 'info' };
   }
 }
 
@@ -66,10 +64,10 @@ function canAccessStep(targetStep) {
   const sessionId = sessionStorage.getItem('session_id');
   
   // Always allow name step if no session exists
-  if (targetStep === 'name' && !sessionId) return true;
+  if (targetStep === 'info' && !sessionId) return true;
   
   // Require session for other steps  
-  if (!sessionId && targetStep !== 'name') return false;
+  if (!sessionId && targetStep !== 'info') return false;
   
   const stepConfig = FLOW_STEPS[targetStep];
   if (!stepConfig) return false;
@@ -88,7 +86,7 @@ export default function FlowApp() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const currentStep = location.pathname.split('/').pop() || 'name';
+  const currentStep = location.pathname.split('/').pop() || 'info';
   const lastValidStepRef = useRef(currentStep);
   
   // Update flow state when accessing a valid step
@@ -96,7 +94,7 @@ export default function FlowApp() {
     const sessionId = sessionStorage.getItem('session_id');
     
     // For fresh starts (no session), allow name step
-    if (!sessionId && currentStep === 'name') {
+    if (!sessionId && currentStep === 'info') {
       return;
     }
     
@@ -105,8 +103,8 @@ export default function FlowApp() {
       lastValidStepRef.current = currentStep;
     } else {
       // If trying to access invalid step, redirect to current max step
-      const state = getFlowState();
-      const targetStep = state.currentMaxStep || 'name';
+  const state = getFlowState();
+  const targetStep = state.currentMaxStep || 'info';
       if (currentStep !== targetStep) {
         navigate(`../${targetStep}`, { replace: true });
       }
@@ -186,15 +184,8 @@ export default function FlowApp() {
   
   return (
     <Routes>
-      <Route path="name" element={<NameScreen testType={testType} />} />
-      <Route 
-        path="consent" 
-        element={
-          canAccessStep('consent') ? 
-            <ConsentScreen testType={testType} /> : 
-            <Navigate to={getRedirectTarget()} replace />
-        } 
-      />
+  <Route path="info" element={<NameScreen testType={testType} />} />
+      { /* consent step removed (combined with name) */ }
       <Route 
         path="task" 
         element={
@@ -219,7 +210,7 @@ export default function FlowApp() {
             <Navigate to={getRedirectTarget()} replace />
         } 
       />
-      <Route path="*" element={<Navigate to="name" replace />} />
+  <Route path="*" element={<Navigate to="info" replace />} />
     </Routes>
   );
 }

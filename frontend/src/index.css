@@ -42,7 +42,7 @@ body{
 
 /* ===== App shell & page layout ===== */
 .container{ max-width:1200px; margin:0 auto; padding:16px 16px 24px; }
-.page{ max-width:760px; margin:48px auto; padding:0 16px; }
+.page{ max-width:760px; margin:48px auto; padding:0 16px 32px; }
 
 /* Cards */
 .card{

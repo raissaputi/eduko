@@ -170,7 +170,7 @@ export default function TaskScreen({ testType = "fe" }) {
     
     try {
       const stored = sessionStorage.getItem(`flow_state_${sessionId}`);
-      const state = stored ? JSON.parse(stored) : { completedSteps: [], currentMaxStep: 'name' };
+  const state = stored ? JSON.parse(stored) : { completedSteps: [], currentMaxStep: 'info' };
       
       if (!state.completedSteps.includes(step)) {
         state.completedSteps.push(step);

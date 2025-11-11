@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 from pathlib import Path
 import os, json, uuid
+from typing import Optional
 
 router = APIRouter(prefix="/api/session", tags=["session"])
 
@@ -15,6 +16,7 @@ DATA_ROOT = Path("data") / "sessions"
 class StartIn(BaseModel):
     name: str
     test: str  # "fe" or "dv"
+    consent: Optional[bool] = False
 
 
 # ---------- Helpers ----------
@@ -95,6 +97,7 @@ def start_session(data: StartIn):
         "session_id": sid,
         "name": data.name,
         "test_type": data.test.lower(),
+        "consent": bool(data.consent),
         "created_at": _utcnow_iso(),
         "finished_at": None,
     }
