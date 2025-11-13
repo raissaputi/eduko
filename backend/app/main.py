@@ -35,14 +35,20 @@ def problems_fe():
         {
             "id": "fe1",
             "type": "FE",
-            "title": "FE #1: Simple card",
-            "statement": "Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button. Build a centered card with a title and button."
+            "title": "FE #1: Simple Card Carousel",
+            "statement": "Bangun sebuah carousel card (isi: 1, 2, 3) dengan tombol kiri/kanan.",
+            # Optional media URL (served from frontend/public). Place a GIF named fe1-demo.gif under frontend/public/gifs
+            "media_url": "/gifs/fe1-demo.gif"
         },
         {
             "id": "fe2",
-            "type": "FE",
-            "title": "FE #2: Dropdown",
-            "statement": "Create a dropdown that opens/closes on click."
+            "title": "FE #2: FAQ Section",
+            "statement": """Bangun section FAQ berisi beberapa item. Anda bebas menentukan gaya visual & layout, selama memenuhi kebutuhan aksesibilitas, responsivitas, dan kualitas dasar FE.
+What is CSS?: CSS (Cascading Style Sheets) describes how HTML elements are presented.
+What is JavaScript?: JavaScript lets you create dynamic, interactive behavior in web pages.
+What is HTML?: HTML (HyperText Markup Language) structures content on the web.""",
+            # No GIF for problem 2
+            # "media_url": "/gifs/fe2-demo.gif"
         }
     ]
 
@@ -74,6 +80,8 @@ plt.figure(figsize=(10, 6))
 # Create the line plot
 # Add labels and title
 # Customize the appearance"""
+            ,
+            "media_url": "/gifs/dv1-demo.gif"
         },
         {
             "id": "dv2",
@@ -100,5 +108,7 @@ plt.figure(figsize=(10, 6))
 # Create the bar chart
 # Add value labels
 # Customize colors and add legend"""
+            ,
+            "media_url": "/gifs/dv2-demo.gif"
         }
     ]

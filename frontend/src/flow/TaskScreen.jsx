@@ -322,24 +322,59 @@ export default function TaskScreen({ testType = "fe" }) {
       {/* LEFT column */}
       <div className="left-col">
         {/* Problem statement + controls */}
-        <section className="problem-bar">
-          <div className="left">
-            <div className="title">{active.title}</div>
-            {active.statement && <div className="statement">{active.statement}</div>}
-          </div>
-          <div className="right">
-            <div className="timer">⏱ {formatMMSS(leftMs)}</div>
-            <button className="btn primary" onClick={submit} disabled={submitted}>
-              {submitted ? "Submitted" : "Submit"}
-            </button>
-            <button
-              className="btn"
-              onClick={goNext}
-              disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}
-            >
-              {isLast ? "Finish → Survey" : "Next →"}
-            </button>
-          </div>
+        <section className={`problem-bar ${testType==='fe' ? 'fe-sticky' : ''}`}>
+          {testType === 'fe' ? (() => {
+            const hasGif = !!active.media_url;
+            return (
+              <div className="problem-grid" style={{gridTemplateColumns: hasGif ? '280px 1fr' : '1fr'}}>
+                {hasGif && (
+                  <div className="problem-gif">
+                    <img src={active.media_url} alt="Demo" />
+                  </div>
+                )}
+                <div className="problem-meta" style={{display:'flex', flexDirection:'column', gap:8}}>
+                  <div>
+                    <div className="title" style={{marginBottom:4}}>{active.title}</div>
+                    {active.statement && <div className="statement" style={{marginBottom:8}}>{active.statement}</div>}
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:10, marginTop:'auto'}}>
+                    <div className="timer">⏱ {formatMMSS(leftMs)}</div>
+                    <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
+                    <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })() : (
+            <>
+              <div className="left">
+                <div className="title">{active.title}</div>
+                {active.statement && <div className="statement">{active.statement}</div>}
+                {active.media_url && (
+                  <div className="media" style={{ marginTop: 8 }}>
+                    <img
+                      src={active.media_url}
+                      alt="Ilustrasi tugas"
+                      style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="right">
+                <div className="timer">⏱ {formatMMSS(leftMs)}</div>
+                <button className="btn primary" onClick={submit} disabled={submitted}>
+                  {submitted ? "Submitted" : "Submit"}
+                </button>
+                <button
+                  className="btn"
+                  onClick={goNext}
+                  disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}
+                >
+                  {isLast ? "Finish → Survey" : "Next →"}
+                </button>
+              </div>
+            </>
+          )}
         </section>
 
         {/* Workbench */}
