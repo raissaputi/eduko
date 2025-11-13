@@ -30,19 +30,26 @@ def _parse_data_url(data_url: str) -> Optional[Dict[str, str]]:
     except Exception:
         return None
 
-def build_prompt(message: str,
-                 _problem_title: Optional[str],
-                 _problem_statement: Optional[str],
-                 images: Optional[List[str]] = None) -> List[ChatMsg]:
-    """RAW: user text + optional inline images (data URLs).
-    We keep a simple internal structure and convert to Gemini parts later.
+def build_messages(history: List[Dict[str, Any]],
+                   images: Optional[List[str]] = None) -> List[ChatMsg]:
+    """Build internal ChatMsg list from history turns.
+    history: list of {role: 'user'|'assistant', text: str}
+    images: optional list of data URLs for the last user turn (attachments)
     """
-    imgs: List[Dict[str, str]] = []
-    for it in (images or []):
-        parsed = _parse_data_url(it)
-        if parsed:
-            imgs.append(parsed)
-    return [{"role": "user", "text": message, "images": imgs}]
+    msgs: List[ChatMsg] = []
+    for h in history:
+        role = 'user' if h.get('role') == 'user' else 'assistant'
+        msgs.append({"role": role, "text": h.get("text", "")})
+    if images:
+        # attach images to final user message if the last role is user
+        if msgs and msgs[-1].get("role") == "user":
+            imgs: List[Dict[str, str]] = []
+            for it in images:
+                parsed = _parse_data_url(it)
+                if parsed:
+                    imgs.append(parsed)
+            msgs[-1]["images"] = imgs
+    return msgs
 
 class GeminiProvider:
     def __init__(self, model: str):

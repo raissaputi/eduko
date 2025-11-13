@@ -184,7 +184,28 @@ export default function ChatPanel({ problem }) {
     }, 0)
     logEvent('chat_send', { problem_id: meta.problem_id, prompt_len: content.length, img_count: images.length, img_bytes_b64_len: totalImgBytes })
 
-    const payload = { message: content, images, ...meta }
+    // Build trimmed history (exclude images, keep roles/text only)
+    const MAX_HISTORY_CHARS = 8000
+    let accChars = 0
+    const trimmed = []
+    // Iterate from end backwards to keep most recent context first
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      // Skip if assistant message still streaming
+      if (m.streaming) continue
+      // Only include user/assistant textual messages
+      if (m.role === 'user' || m.role === 'assistant') {
+        const text = m.text || ''
+        const nextLen = accChars + text.length
+        if (nextLen > MAX_HISTORY_CHARS) break
+        accChars = nextLen
+        trimmed.push({ role: m.role, text })
+      }
+    }
+    // Reverse back to chronological order
+    trimmed.reverse()
+
+    const payload = { message: content, images, history: trimmed, ...meta }
     if (online && wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(payload))
       setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: '', streaming: true }])
