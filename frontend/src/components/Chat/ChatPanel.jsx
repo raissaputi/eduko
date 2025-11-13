@@ -55,6 +55,7 @@ function CodeBlock({ inline, className, children, problemId, ...props }) {
 export default function ChatPanel({ problem }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [images, setImages] = useState([]) // data URLs
   const [online, setOnline] = useState(false)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
@@ -159,11 +160,13 @@ export default function ChatPanel({ problem }) {
 
   const send = () => {
     const content = input.trim()
-    if (!content || isStreaming) return
+    if (!content && images.length === 0) return
+    if (isStreaming) return
 
-    const userMsg = { id: crypto.randomUUID(), role: 'user', text: content }
+    const userMsg = { id: crypto.randomUUID(), role: 'user', text: content, images }
     setMessages(p => [...p, userMsg])
     setInput('')
+    setImages([])
     
     // Reset textarea height
     if (textareaRef.current) {
@@ -173,14 +176,23 @@ export default function ChatPanel({ problem }) {
 
     logEvent('chat_send', { problem_id: meta.problem_id, prompt_len: content.length })
 
+    // basic metrics for logging
+    const totalImgBytes = images.reduce((acc, url) => {
+      const i = typeof url === 'string' ? url.indexOf(',') : -1
+      const b64 = i >= 0 ? url.slice(i + 1) : ''
+      return acc + b64.length
+    }, 0)
+    logEvent('chat_send', { problem_id: meta.problem_id, prompt_len: content.length, img_count: images.length, img_bytes_b64_len: totalImgBytes })
+
+    const payload = { message: content, images, ...meta }
     if (online && wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ message: content, ...meta }))
+      wsRef.current.send(JSON.stringify(payload))
       setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: '', streaming: true }])
     } else {
       fetch(`${API}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, session_id: meta.session_id, ...meta })
+        body: JSON.stringify({ ...payload, session_id: meta.session_id })
       })
         .then(r => r.json())
         .then(data => setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: data.reply }]))
@@ -195,12 +207,42 @@ export default function ChatPanel({ problem }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
+  const onPaste = (e) => {
+    const items = e.clipboardData?.items || []
+    let handled = false
+    for (const it of items) {
+      if (it.type && it.type.startsWith('image/')) {
+        const file = it.getAsFile()
+        if (file) {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const url = reader.result
+            if (typeof url === 'string') setImages(prev => [...prev, url])
+          }
+          reader.readAsDataURL(file)
+          handled = true
+        }
+      }
+    }
+    if (handled) {
+      // Prevent the raw image blob from trying to paste as text
+      e.preventDefault()
+    }
+  }
+
   return (
     <div className="chat-root">
       <div ref={scrollRef} className='chat-scroll'>
         {messages.map(m => (
           <div key={m.id} className={`row ${m.role}`}>
             <div className={`bubble ${m.role}`}>
+              {Array.isArray(m.images) && m.images.length > 0 && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
+                  {m.images.map((url, i) => (
+                    <img key={i} src={url} alt={`img-${i}`} style={{ maxWidth: '180px', maxHeight: '180px', objectFit:'contain', borderRadius:8, border:'1px solid var(--border)', background:'#111' }} />
+                  ))}
+                </div>
+              )}
               {m.role === 'assistant' ? (
                 <article className="markdown-body chat-md">
                   <ReactMarkdown
@@ -234,6 +276,21 @@ export default function ChatPanel({ problem }) {
       </div>
 
       <div className='chat-input'>
+        {/* Image attachments preview */}
+        {images.length > 0 && (
+          <div style={{ gridColumn: '1 / span 2', display:'flex', gap:8, padding:'0 12px 8px' }}>
+            {images.map((url, i) => (
+              <div key={i} style={{ position:'relative' }}>
+                <img src={url} alt={`attachment-${i}`} style={{ width:56, height:56, objectFit:'cover', borderRadius:8, border:'1px solid var(--border)' }} />
+                <button 
+                  onClick={() => setImages(imgs => imgs.filter((_,idx) => idx!==i))}
+                  className='btn'
+                  style={{ position:'absolute', top:-8, right:-8, width:22, height:22, padding:0 }}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={input}
@@ -247,6 +304,7 @@ export default function ChatPanel({ problem }) {
             // Enable/disable scrolling based on content height
             e.target.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
           }}
+          onPaste={onPaste}
           onKeyDown={onKey}
           placeholder='Ask anything...'
           disabled={isStreaming}
@@ -257,7 +315,7 @@ export default function ChatPanel({ problem }) {
         />
         <button 
           onClick={send}
-          disabled={isStreaming || !input.trim()}
+          disabled={isStreaming || !(input.trim() || images.length)}
           title={isStreaming ? "Stop" : "Send"}
         >
           {isStreaming ? (

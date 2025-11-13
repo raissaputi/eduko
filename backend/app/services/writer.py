@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Iterable
 from uuid import uuid4
 import difflib
+import base64
 
 
 # ---------- Paths & FS helpers ----------
@@ -232,3 +233,49 @@ def append_chat_raw(session_id: str, record: Dict[str, Any]) -> None:
         # Fallback to raw/chat.jsonl for chats without problem context
         chat_path = raw_dir(session_id) / "chat.jsonl"
     append_jsonl(chat_path, record)
+
+
+# ---------- Chat image storage ----------
+
+_EXT_BY_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+
+
+def save_chat_image_dataurl(session_id: str,
+                            problem_id: Optional[str | int],
+                            data_url: str) -> Optional[str]:
+    """Save a data URL image into the session folder and return a relative path under data/.
+    Example return: "sessions/<sid>/problems/<pid>/chat_images/img_20250101T120000_1.jpg"
+    Returns None on failure.
+    """
+    try:
+        if not data_url.startswith("data:"):
+            return None
+        header, b64 = data_url.split(",", 1)
+        mime = header[len("data:"):].split(";")[0]
+        ext = _EXT_BY_MIME.get(mime, ".bin")
+
+        # target directory
+        if problem_id is not None:
+            base = problem_dir(session_id, problem_id) / "chat_images"
+        else:
+            base = raw_dir(session_id) / "chat_images"
+        ensure_dir(base)
+
+        # filename: img_<uuid>.<ext>
+        name = f"img_{uuid4().hex}{ext}"
+        path = base / name
+        # decode base64
+        with path.open("wb") as f:
+            f.write(base64.b64decode(b64))
+
+        # return path relative to data directory
+        rel = path.relative_to(DATA_ROOT).as_posix()
+        return rel
+    except Exception:
+        return None

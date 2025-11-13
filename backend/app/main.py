@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import chat, sessions, events
 from app.routers.submissions_fe import router as fe_router
@@ -13,6 +14,9 @@ app.add_middleware(
     allow_origins=["http://localhost:5173"],
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
+
+# Serve data folder for media (images saved from chat)
+app.mount("/media", StaticFiles(directory="data", html=False), name="media")
 
 @app.get("/health")
 def health():

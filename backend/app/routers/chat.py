@@ -1,12 +1,12 @@
 # app/routers/chat.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import asyncio
 import time
 
 from app.services.llm import provider, build_prompt
-from app.services.writer import append_event, append_chat_raw
+from app.services.writer import append_event, append_chat_raw, save_chat_image_dataurl
 
 router = APIRouter(tags=["chat"])
 
@@ -17,25 +17,35 @@ class ChatIn(BaseModel):
     problem_title: Optional[str] = None
     problem_statement: Optional[str] = None
     thread_id: Optional[str] = None
+    images: Optional[List[str]] = None  # data URLs from client
 
 class ChatOut(BaseModel):
     reply: str
 
 @router.post("/api/chat", response_model=ChatOut)
 async def chat_rest(payload: ChatIn):
-    msgs = build_prompt(payload.message, payload.problem_title, payload.problem_statement)
+    # Persist images to disk and collect URLs
+    image_urls = []
+    if payload.images:
+        for data_url in payload.images:
+            rel = save_chat_image_dataurl(payload.session_id, payload.problem_id, data_url)
+            if rel:
+                image_urls.append(f"/media/{rel}")
+
+    msgs = build_prompt(payload.message, payload.problem_title, payload.problem_statement, images=payload.images)
     text = await provider.complete(msgs)
     
     # Store full chat content
     current_ts = int(time.time() * 1000)
     chat_id = f"chat_{current_ts}"
 
-    # Store full content in chat.jsonl
+    # Store full content in chat.jsonl (include images if any)
     append_chat_raw(payload.session_id, {
         "id": chat_id,
         "client_ts": current_ts,
         "problem_id": payload.problem_id,
         "prompt": payload.message,
+        "image_urls": image_urls,
         "response": text
     })
     
@@ -46,7 +56,8 @@ async def chat_rest(payload: ChatIn):
         "session_id": payload.session_id,
         "payload": {
             "problem_id": payload.problem_id,
-            "chat_id": chat_id
+            "chat_id": chat_id,
+            "img_count": len(payload.images or [])
         }
     })
     
@@ -73,7 +84,16 @@ async def chat_ws(ws: WebSocket):
             problem_id = data.get("problem_id")
             problem_title = data.get("problem_title")
             problem_statement = data.get("problem_statement")
-            msgs = build_prompt(message, problem_title, problem_statement)
+            images = data.get("images")
+            # Persist images to disk and collect URLs
+            image_urls = []
+            if images:
+                for data_url in images:
+                    rel = save_chat_image_dataurl(session_id, problem_id, data_url)
+                    if rel:
+                        image_urls.append(f"/media/{rel}")
+
+            msgs = build_prompt(message, problem_title, problem_statement, images=images)
 
             # Generate chat ID 
             current_ts = int(time.time() * 1000)
@@ -98,12 +118,13 @@ async def chat_ws(ws: WebSocket):
                 full_response += tok
                 await ws.send_json({"type": "token", "text": tok})
             
-            # Store full content in chat.jsonl
+            # Store full content in chat.jsonl (include images if any)
             append_chat_raw(session_id, {
                 "id": chat_id,
                 "client_ts": current_ts,
                 "problem_id": problem_id,
                 "prompt": message,
+                "image_urls": image_urls,
                 "response": full_response
             })
 
@@ -114,7 +135,8 @@ async def chat_ws(ws: WebSocket):
                 "session_id": session_id,
                 "payload": {
                     "problem_id": problem_id,
-                    "chat_id": chat_id
+                    "chat_id": chat_id,
+                    "img_count": len(images or [])
                 }
             })
             
