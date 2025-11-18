@@ -6,6 +6,7 @@ import ChatPanel from "../components/Chat/ChatPanel.jsx";
 import FEWorkbench from "../components/workbench/FEWorkbench.jsx";
 import DVWorkbench from "../components/workbench/DVWorkbench.jsx";
 import { logEvent } from '../lib/logger.js'
+import DVNotebook from '../components/workbench/DVNotebook';
 
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
@@ -390,7 +391,14 @@ export default function TaskScreen({ testType = "fe" }) {
               onDragInner={startDragInner}
             />
           ) : (
-            <DVWorkbench
+            (import.meta.env.VITE_DV_NOTEBOOK === '1' ? (
+              <DVNotebook
+                sessionId={sessionId}
+                problem={active}
+                isSubmitted={submitted}
+              />
+            ) : (
+              <DVWorkbench
               code={code}
               onEdit={onEdit}
               onRun={async () => {
@@ -431,7 +439,8 @@ export default function TaskScreen({ testType = "fe" }) {
               innerPct={innerPct}
               onDragInner={startDragInner}
               output={dvOutputById[active.id]}
-            />
+              />
+            ))
           )}
         </section>
         

@@ -183,6 +183,46 @@ body{
 }
 .wb-divider:hover .grabber{ background:rgba(255,255,255,.18); }
 
+/* ===== Notebook cells (DVNotebook) ===== */
+.nb-cell{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+.nb-cell + .nb-cell{ margin-top: 0; }
+.nb-cell-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 8px 10px; background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.nb-head-left{ display:flex; align-items:center; gap:8px; }
+.nb-head-right{ display:flex; align-items:center; gap:6px; }
+.nb-title{ font-size:12px; font-weight:600; opacity:.9; }
+.btn.icon{ width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:8px; }
+.nb-editor{ height: 220px; }
+.nb-output{ padding: 10px 12px; background:#0b0b0b; border-top:1px solid var(--border); }
+
+/* Bottom add button like Colab "+ Code" */
+.nb-add-row{
+  display:flex; justify-content:center; padding:10px 0 16px;
+}
+.pill-add{
+  appearance:none; cursor:pointer; border:1px solid rgba(255,255,255,.2);
+  background:#2b2c34; color:#bcd6ff; font-weight:600;
+  padding:6px 12px; border-radius:999px; display:flex; align-items:center; gap:8px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.pill-add .plus{ font-size:16px; line-height:1; }
+.pill-add:hover{ background:#30313a; border-color: rgba(255,255,255,.28); }
+.pill-add:disabled{ opacity:.6; cursor:not-allowed; }
+
+/* Notebook body gutter for nicer left spacing */
+.nb-body{
+  padding: 8px 12px 20px 16px; /* top right bottom left */
+}
+
 /* ===== Right column (Assistant) ===== */
 .chat-col{
   position:sticky;
