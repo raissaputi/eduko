@@ -390,8 +390,7 @@ export default function TaskScreen({ testType = "fe" }) {
               innerPct={innerPct}
               onDragInner={startDragInner}
             />
-          ) : (
-            (import.meta.env.VITE_DV_NOTEBOOK === '1' ? (
+            ) : import.meta.env.VITE_DV_NOTEBOOK === "1" ? (
               <DVNotebook
                 sessionId={sessionId}
                 problem={active}
@@ -399,84 +398,111 @@ export default function TaskScreen({ testType = "fe" }) {
               />
             ) : (
               <DVWorkbench
-              code={code}
-              onEdit={onEdit}
-              onRun={async () => {
-                if (!active) return;
-                const pid = active.id;
-                logEvent("run_click", { problem_id: pid });
-                
-                try {
-                  const res = await fetch(`${API}/api/submissions/run/dv`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                      session_id: sessionId, 
-                      problem_id: pid, 
-                      code: code 
-                    })
-                  });
-                  const data = await res.json();
-                  if (!res.ok) {
-                    throw new Error(data.detail || 'Run failed');
+                code={code}
+                onEdit={onEdit}
+                onRun={async () => {
+                  if (!active) return;
+                  const pid = active.id;
+                  const snippet = codeById[pid] || "";
+
+                  try {
+                    logEvent("run_click", {
+                      problem_id: pid,
+                      via: "dv",
+                    });
+                    const res = await fetch(
+                      `${API}/api/submissions/run/dv`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          session_id: sessionId,
+                          problem_id: pid,
+                          code: snippet,
+                        }),
+                      }
+                    );
+                    const data = await res.json();
+                    if (!res.ok)
+                      throw new Error(data.detail || "Run failed");
+                    setDvOutputById((prev) => ({
+                      ...prev,
+                      [pid]: data,
+                    }));
+                  } catch (e) {
+                    console.error("Run error:", e);
+                    alert("Failed to run code. Please try again.");
                   }
-                  const { plot, stderr } = data;
-                  if (stderr) {
-                    alert(`Error: ${stderr}`);
-                  }
-                  setDvOutputById(prev => ({ ...prev, [pid]: plot }));
-                  
-                  if (!firstPreviewById.current[pid]) {
-                    firstPreviewById.current[pid] = true;
-                    logEvent("first_preview", { problem_id: pid });
-                  }
-                } catch (e) {
-                  console.error("Run error:", e);
-                  alert("Failed to run code. Please try again.");
-                }
-              }}
-              isSubmitted={submitted}
-              innerPct={innerPct}
-              onDragInner={startDragInner}
-              output={dvOutputById[active.id]}
+                }}
+                isSubmitted={submitted}
+                innerPct={innerPct}
+                onDragInner={startDragInner}
+                output={dvOutputById[active.id]}
               />
-            ))
-          )}
-        </section>
-        
-      </div>
-
-      {/* Middle vertical divider (resizable chat width) */}
-      <div className="outer-divider" onMouseDown={startDragRight}>
-        <span className="handle" />
-      </div>
-
-      {/* RIGHT column: Assistant (sticky & scrollable) */}
-      <aside className="chat-col">
-        <div className="pane-head"><h3>Assistant</h3></div>
-        <div className="pane-body">
-          <ChatPanel problem={active} threadId={threadId} />
+            )}
+          </section>
         </div>
-      </aside>
-    </div>
 
-    {/* Fullscreen Preview overlay (unchanged) */}
-    {isFullscreen && (
-      <div style={{
-        position:"fixed", inset:0, background:"rgba(0,0,0,.8)",
-        zIndex:9999, display:"flex", flexDirection:"column"
-      }}>
-        <div style={{
-          display:"flex", justifyContent:"space-between", alignItems:"center",
-          padding:"10px 14px", borderBottom:"1px solid var(--border)", background:"#0f0f15", color:"#fff"
-        }}>
-          <strong>Preview — Fullscreen</strong>
-          <button className="btn" onClick={() => setIsFullscreen(false)}>Close ✕</button>
+        {/* Middle vertical divider (resizable chat width) */}
+        <div className="outer-divider" onMouseDown={startDragRight}>
+          <span className="handle" />
         </div>
-        <iframe title="preview-full" sandbox="allow-scripts" srcDoc={code}
-                style={{ flex:1, width:"100%", height:"100%", border:0, background:"#fff" }} />
+
+        {/* RIGHT column: Assistant (sticky & scrollable) */}
+        <aside className="chat-col">
+          <div className="pane-head">
+            <h3>Assistant</h3>
+          </div>
+          <div className="pane-body">
+            <ChatPanel problem={active} threadId={threadId} />
+          </div>
+        </aside>
       </div>
-    )}
-  </section>
-);
+
+      {/* Fullscreen Preview overlay (unchanged) */}
+      {isFullscreen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.8)",
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "10px 14px",
+              borderBottom: "1px solid var(--border)",
+              background: "#0f0f15",
+              color: "#fff",
+            }}
+          >
+            <strong>Preview — Fullscreen</strong>
+            <button className="btn" onClick={() => setIsFullscreen(false)}>
+              Close ✕
+            </button>
+          </div>
+          <iframe
+            title="preview-full"
+            sandbox="allow-scripts"
+            srcDoc={code}
+            style={{
+              flex: 1,
+              width: "100%",
+              height: "100%",
+              border: 0,
+              background: "#fff",
+            }}
+          />
+        </div>
+      )}
+    </section>
+  );
 }

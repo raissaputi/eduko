@@ -90,81 +90,113 @@ export default function DVNotebook({ sessionId, problem, isSubmitted }) {
   }
 
   return (
-    <div className="wb-pane" style={{ height:'100%', display:'flex', flexDirection:'column' }}>
+    <div
+      className="wb-pane"
+      style={{ 
+        flex: 1, 
+        minHeight: 0, 
+        display: 'flex', 
+        flexDirection: 'column',
+        overflow: 'hidden' // Important: container should not scroll
+      }}
+    >
       {/* Sticky header with controls */}
-      <div className="wb-head" style={{ display:'flex', gap:8, alignItems:'center', position:'sticky', top:0, zIndex:1 }}>
+      <div 
+        className="wb-head" 
+        style={{ 
+          display:'flex', 
+          gap:8, 
+          alignItems:'center',
+          flexShrink: 0 // Prevent header from shrinking
+        }}
+      >
         <div className="wb-title">Notebook</div>
         <button className="btn" onClick={runAll} disabled={isSubmitted}>Run All ▶</button>
       </div>
+
       {/* Scrollable notebook content */}
-  <div ref={bodyRef} className="wb-body nb-body" style={{ display:'flex', flexDirection:'column', gap:16, overflowY:'auto' }}>
-        {cells.map((cell, idx) => (
-          <div key={idx} className="nb-cell">
-            <div className="nb-cell-head">
-              <div className="nb-head-left">
-                <button className="btn icon" onClick={()=>runOne(idx)} disabled={isSubmitted} title="Run cell">▶</button>
-                <div className="nb-title">In [{idx+1}]</div>
+      <div 
+        ref={bodyRef} 
+        className="wb-body nb-body" 
+        style={{
+          flex: '1 1 0', // Key: allow shrinking to 0
+          minHeight: 0, // Key: allow flex child to shrink below content size
+          overflowY: 'auto', // Enable vertical scrolling
+          overflowX: 'hidden',
+          padding: '8px 12px 20px 16px'
+        }}
+      >
+        {/* Content wrapper - normal block flow */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {cells.map((cell, idx) => (
+            <div key={idx} className="nb-cell">
+              <div className="nb-cell-head">
+                <div className="nb-head-left">
+                  <button className="btn icon" onClick={()=>runOne(idx)} disabled={isSubmitted} title="Run cell">▶</button>
+                  <div className="nb-title">In [{idx+1}]</div>
+                </div>
+                <div className="nb-head-right">
+                  <button className="btn icon" onClick={()=>delCell(idx)} disabled={isSubmitted || cells.length<=1} title="Delete cell">🗑</button>
+                </div>
               </div>
-              <div className="nb-head-right">
-                <button className="btn icon" onClick={()=>delCell(idx)} disabled={isSubmitted || cells.length<=1} title="Delete cell">🗑</button>
+              <div className="nb-editor" style={{ height: cell.height }}>
+                <Editor
+                  height={cell.height}
+                  defaultLanguage="python"
+                  theme="vs-dark"
+                  value={cell.source}
+                  onChange={(v)=>updCell(idx, v)}
+                  onMount={(editor) => {
+                    editorRefs.current[idx] = editor
+                    // Measure and set height initially and on changes
+                    const computeHeight = () => {
+                      try {
+                        const model = editor.getModel()
+                        const lineCount = model ? model.getLineCount() : 1
+                        // Monaco content height gives a good fit. Fallback to lines*lineHeight.
+                        const contentH = editor.getContentHeight ? editor.getContentHeight() : (lineCount * 20)
+                        const minLineH = 20 // approximate single-line height
+                        const desired = Math.max(contentH + 12, minLineH + 12) // ensure at least 1 line
+                        // clamp to avoid overly tall cells; allow generous space
+                        const clamped = Math.min(Math.max(desired, 32), 520)
+                        setCells(cs => cs.map((c,i)=> i===idx? { ...c, height: clamped } : c))
+                      } catch (_e) {}
+                    }
+                    // Initial compute
+                    setTimeout(computeHeight, 0)
+                    // Recompute on content size change
+                    editor.onDidContentSizeChange(computeHeight)
+                    editor.onDidPaste(computeHeight)
+                    editor.onDidPaste((e) => {
+                      const text = editor.getModel().getValueInRange(e);
+                      logEvent('code_paste', { len: text.length, kind: 'dvnb' })
+                    });
+                  }}
+                  options={{
+                    fontSize: 14,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    readOnly: isSubmitted,
+                    automaticLayout: true,
+                  }}
+                />
+              </div>
+              <div className="nb-output">
+                <OutputView out={cell.output} />
               </div>
             </div>
-            <div className="nb-editor" style={{ height: cell.height }}>
-              <Editor
-                height={cell.height}
-                defaultLanguage="python"
-                theme="vs-dark"
-                value={cell.source}
-                onChange={(v)=>updCell(idx, v)}
-                onMount={(editor) => {
-                  editorRefs.current[idx] = editor
-                  // Measure and set height initially and on changes
-                  const computeHeight = () => {
-                    try {
-                      const model = editor.getModel()
-                      const lineCount = model ? model.getLineCount() : 1
-                      // Monaco content height gives a good fit. Fallback to lines*lineHeight.
-                      const contentH = editor.getContentHeight ? editor.getContentHeight() : (lineCount * 20)
-                      const minLineH = 20 // approximate single-line height
-                      const desired = Math.max(contentH + 12, minLineH + 12) // ensure at least 1 line
-                      // clamp to avoid overly tall cells; allow generous space
-                      const clamped = Math.min(Math.max(desired, 32), 520)
-                      setCells(cs => cs.map((c,i)=> i===idx? { ...c, height: clamped } : c))
-                    } catch (_e) {}
-                  }
-                  // Initial compute
-                  setTimeout(computeHeight, 0)
-                  // Recompute on content size change
-                  editor.onDidContentSizeChange(computeHeight)
-                  editor.onDidPaste(computeHeight)
-                  editor.onDidPaste((e) => {
-                    const text = editor.getModel().getValueInRange(e);
-                    logEvent('code_paste', { len: text.length, kind: 'dvnb' })
-                  });
-                }}
-                options={{
-                  fontSize: 14,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on',
-                  readOnly: isSubmitted,
-                  automaticLayout: true,
-                }}
-              />
-            </div>
-            <div className="nb-output">
-              <OutputView out={cell.output} />
-            </div>
+          ))}
+          
+          {/* Add cell control at bottom */}
+          <div className="nb-add-row">
+            <button className="pill-add" onClick={addCell} disabled={isSubmitted}>
+              <span className="plus">+</span>
+              <span>Code</span>
+            </button>
           </div>
-        ))}
-        {/* Add cell control at bottom */}
-        <div className="nb-add-row">
-          <button className="pill-add" onClick={addCell} disabled={isSubmitted}>
-            <span className="plus">+</span>
-            <span>Code</span>
-          </button>
+          <div ref={endRef} />
         </div>
-        <div ref={endRef} />
       </div>
     </div>
   )
