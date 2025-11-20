@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import Editor from "@monaco-editor/react";
+import { logEvent } from '../../lib/logger';
 
 export default function FEWorkbench({ 
   code, 
@@ -36,11 +37,17 @@ export default function FEWorkbench({
             onChange={onEdit}
             onMount={(editor) => {
               editor.onDidPaste((e) => {
-                const text = editor.getModel().getValueInRange(e);
-                logEvent("code_paste", { 
-                  len: text.length,
-                  kind: 'fe'
-                });
+                try {
+                  const model = editor.getModel();
+                  const pastedText = model.getValueInRange(e.range);
+                  logEvent("code_paste", { 
+                    len: pastedText.length,
+                    content: pastedText.substring(0, 500), // first 500 chars
+                    kind: 'fe'
+                  });
+                } catch (err) {
+                  console.warn('Paste logging failed:', err);
+                }
               });
             }}
             options={{

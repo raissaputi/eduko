@@ -61,6 +61,7 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
     - Per-problem event logs (log_problem_*.txt)
     - Full chat log (log_chat.txt)
     - Per-problem chat logs (log_chat_*.txt)
+    - Paste content archive (log_pastes.txt)
     
     Returns (full_log_path, {problem_id: event_log_path})
     """
@@ -79,16 +80,64 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
 
     lines: List[str] = []
     lines_with_pid: List[Tuple[str, Optional[str]]] = []
+    paste_entries: List[str] = []  # Full paste content archive
+    paste_counter = 1
+    current_problem: Optional[str] = None  # Track active problem context
 
     for ev in events:
-        line = _pretty_line(ev)
-        pid = _extract_problem_id(ev) or _extract_problem_id_from_line(line)
-        lines.append(line)
-        lines_with_pid.append((line, pid))
+        # Update current problem context when user enters a task
+        if ev.get("event_type") in ["task_enter", "task_open"]:
+            current_problem = _extract_problem_id(ev)
+        # Handle paste events specially
+        if ev.get("event_type") == "code_paste":
+            paste_id = f"paste_{paste_counter:03d}"
+            paste_counter += 1
+            
+            payload = ev.get("payload", {})
+            content = payload.get("content", "")
+            length = payload.get("len", 0)
+            kind = payload.get("kind", "")
+            cell_idx = payload.get("cell_index")
+            
+            # Use current problem context if not explicitly in payload
+            pid = _extract_problem_id(ev) or current_problem
+            
+            # Add to main log with reference ID
+            ts = _fmt_ts(ev.get("_ts", 0))
+            cell_info = f" cell={cell_idx}" if cell_idx is not None else ""
+            prob_info = f" problem={pid}" if pid else ""
+            line = f"[{ts}] CODE_PASTE id={paste_id} len={length} kind={kind}{cell_info}{prob_info}"
+            lines.append(line)
+            lines_with_pid.append((line, pid))
+            
+            # Add full content to paste archive
+            paste_entries.extend([
+                f"\n{'='*60}",
+                f"Paste ID: {paste_id}",
+                f"Timestamp: {ts}",
+                f"Length: {length} characters",
+                f"Type: {kind}",
+                f"Cell: {cell_idx if cell_idx is not None else 'N/A'}",
+                f"Problem: {pid if pid else 'N/A'}",
+                f"{'-'*60}",
+                content,
+                f"{'='*60}\n"
+            ])
+        else:
+            line = _pretty_line(ev)
+            pid = _extract_problem_id(ev) or _extract_problem_id_from_line(line)
+            lines.append(line)
+            lines_with_pid.append((line, pid))
 
     # write full log
     dst.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"[✓] Compiled human log: {dst}")
+    
+    # write paste archive if any
+    if paste_entries:
+        paste_file = base / "log_pastes.txt"
+        paste_file.write_text("\n".join(paste_entries), encoding="utf-8")
+        print(f"[✓] Compiled paste archive: {paste_file} ({paste_counter-1} pastes)")
 
     # split events by problem
     per_paths: Dict[str, Path] = {}

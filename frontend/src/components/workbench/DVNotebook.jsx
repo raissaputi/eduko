@@ -198,10 +198,20 @@ const DVNotebook = forwardRef(({ sessionId, problem, isSubmitted }, ref) => {
                     setTimeout(computeHeight, 0)
                     // Recompute on content size change
                     editor.onDidContentSizeChange(computeHeight)
-                    editor.onDidPaste(computeHeight)
                     editor.onDidPaste((e) => {
-                      const text = editor.getModel().getValueInRange(e);
-                      logEvent('code_paste', { len: text.length, kind: 'dvnb' })
+                      computeHeight(); // Also recompute height on paste
+                      try {
+                        const model = editor.getModel();
+                        const pastedText = model.getValueInRange(e.range);
+                        logEvent('code_paste', { 
+                          len: pastedText.length,
+                          content: pastedText.substring(0, 500), // first 500 chars
+                          cell_index: idx,
+                          kind: 'dvnb' 
+                        });
+                      } catch (err) {
+                        console.warn('Paste logging failed:', err);
+                      }
                     });
                   }}
                   options={{
