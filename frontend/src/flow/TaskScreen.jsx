@@ -260,22 +260,43 @@ export default function TaskScreen({ testType = "fe" }) {
     if (left === 0 && lastTickRef.current[active.id] !== 0) {
       lastTickRef.current[active.id] = 0;
       logEvent("auto_submit", { problem_id: active.id });
+      
+      // Show "Waktu habis!" popup
+      alert("⏰ Waktu habis! Jawaban Anda akan dikirim otomatis.");
+      
       (async () => {
         try {
           const pid = active.id;
-          const code = codeById[pid] || "";
-          await fetch(`${API}/api/submissions/${testType}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ session_id: sessionId, problem_id: pid, code })
-          });
-          logEvent("submit_final", { problem_id: pid, size: code.length, auto: true });
+          
+          // For DV notebook mode, submit cells
+          if (testType === 'dv' && notebookRef.current) {
+            const cells = notebookRef.current.getCells();
+            await fetch(`${API}/api/submissions/dvnb`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                session_id: sessionId, 
+                problem_id: pid, 
+                cells: cells.map(c => ({ source: c.source }))
+              })
+            });
+            logEvent("submit_final", { problem_id: pid, cells: cells.length, auto: true });
+          } else {
+            // For FE, submit code
+            const code = codeById[pid] || "";
+            await fetch(`${API}/api/submissions/${testType}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ session_id: sessionId, problem_id: pid, code })
+            });
+            logEvent("submit_final", { problem_id: pid, size: code.length, auto: true });
+          }
         } catch { /* noop */ }
         setSubmittedById(prev => ({ ...prev, [active.id]: true }));
         goNext();
       })();
     }
-  }, [timeLeftById, active?.id, API, sessionId, testType, codeById]);
+  }, [timeLeftById, active?.id, API, sessionId, testType, codeById, notebookRef]);
 
   const leftMs = active ? (timeLeftById[active.id] ?? THIRTY_MIN_MS) : THIRTY_MIN_MS;
   const formatMMSS = (ms) => {
