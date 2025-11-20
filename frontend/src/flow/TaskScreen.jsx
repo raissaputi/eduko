@@ -6,6 +6,7 @@ import ChatPanel from "../components/Chat/ChatPanel.jsx";
 import FEWorkbench from "../components/workbench/FEWorkbench.jsx";
 import { logEvent } from '../lib/logger.js'
 import DVNotebook from '../components/workbench/DVNotebook';
+import ScreenRecorder from '../lib/recorder.js';
 
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
@@ -36,6 +37,10 @@ export default function TaskScreen({ testType = "fe" }) {
   const notebookRef = useRef(null);
 
   const firstPreviewById = useRef({}); // to emit first_preview once per problem
+  
+  // Screen recording
+  const recorderRef = useRef(null);
+  const [recordingStatus, setRecordingStatus] = useState('idle'); // idle | starting | recording | stopping | error
 
   // lightweight debounce for code_change
   const codeDebounceRef = useRef(null);
@@ -146,6 +151,43 @@ export default function TaskScreen({ testType = "fe" }) {
     })();
   };
 
+  // Helper to stop recording and upload
+  const stopAndUploadRecording = async (problemId) => {
+    if (!recorderRef.current || recordingStatus !== 'recording') return;
+    
+    setRecordingStatus('stopping');
+    logEvent("recording_stop", { problem_id: problemId });
+    
+    try {
+      const blob = await recorderRef.current.stop();
+      
+      if (blob && blob.size > 0) {
+        // Upload recording to backend
+        const formData = new FormData();
+        formData.append('recording', blob, `${problemId}_${Date.now()}.webm`);
+        formData.append('problem_id', problemId);
+        
+        await fetch(`${API}/api/sessions/${sessionId}/recording`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        logEvent("recording_uploaded", { 
+          problem_id: problemId,
+          size_bytes: blob.size 
+        });
+      }
+    } catch (error) {
+      logEvent("recording_upload_error", { 
+        problem_id: problemId,
+        error: error.message 
+      });
+      console.warn('Recording upload failed:', error);
+    } finally {
+      setRecordingStatus('idle');
+    }
+  };
+
   const submit = async () => {
     if (!active) return;
     const pid = active.id;
@@ -167,6 +209,10 @@ export default function TaskScreen({ testType = "fe" }) {
         if (!res.ok) { alert("Submit failed. Try again."); return; }
         setSubmittedById(prev => ({ ...prev, [pid]: true }));
         logEvent("submit_final", { problem_id: pid, cells: cells.length });
+        
+        // Stop and upload recording
+        await stopAndUploadRecording(pid);
+        
         alert("Submitted!");
       } catch (e) {
         console.warn("submit error", e);
@@ -187,6 +233,10 @@ export default function TaskScreen({ testType = "fe" }) {
       if (!res.ok) { alert("Submit failed. Try again."); return; }
       setSubmittedById(prev => ({ ...prev, [pid]: true }));
       logEvent("submit_final", { problem_id: pid, size: code.length });
+      
+      // Stop and upload recording
+      await stopAndUploadRecording(pid);
+      
       alert("Submitted!");
     } catch (e) {
       console.warn("submit error", e);
@@ -242,6 +292,33 @@ export default function TaskScreen({ testType = "fe" }) {
     // task_enter when a question becomes active
     logEvent("task_enter", { problem_id: active.id });
 
+    // Start screen recording when task begins
+    const startRecording = async () => {
+      if (!recorderRef.current) {
+        recorderRef.current = new ScreenRecorder();
+      }
+      
+      setRecordingStatus('starting');
+      const result = await recorderRef.current.start();
+      
+      if (result.success) {
+        setRecordingStatus('recording');
+        logEvent("recording_start", { 
+          problem_id: active.id,
+          session_id: sessionId 
+        });
+      } else {
+        setRecordingStatus('error');
+        logEvent("recording_error", { 
+          problem_id: active.id,
+          error: result.error 
+        });
+        console.warn('Recording failed:', result.error);
+      }
+    };
+
+    startRecording();
+
     clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       setTimeLeftById(prev => {
@@ -251,7 +328,7 @@ export default function TaskScreen({ testType = "fe" }) {
       });
     }, 1000);
     return () => clearInterval(intervalRef.current);
-  }, [active?.id]);
+  }, [active?.id, sessionId]);
 
   const lastTickRef = useRef({});
   useEffect(() => {
@@ -291,6 +368,9 @@ export default function TaskScreen({ testType = "fe" }) {
             });
             logEvent("submit_final", { problem_id: pid, size: code.length, auto: true });
           }
+          
+          // Stop and upload recording
+          await stopAndUploadRecording(pid);
         } catch { /* noop */ }
         setSubmittedById(prev => ({ ...prev, [active.id]: true }));
         goNext();
@@ -390,6 +470,8 @@ export default function TaskScreen({ testType = "fe" }) {
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:10, marginTop:'auto'}}>
                     <div className="timer">⏱ {formatMMSS(leftMs)}</div>
+                    {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
+                    {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
                     <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
                     <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
                   </div>
@@ -413,6 +495,8 @@ export default function TaskScreen({ testType = "fe" }) {
               </div>
               <div className="right">
                 <div className="timer">⏱ {formatMMSS(leftMs)}</div>
+                {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
+                {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
                 <button className="btn primary" onClick={submit} disabled={submitted}>
                   {submitted ? "Submitted" : "Submit"}
                 </button>

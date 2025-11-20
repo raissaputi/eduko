@@ -33,3 +33,5 @@ def stop_recording(session_id: str = Form(...)):
     with open(f"{rec_dir}/stopped.txt", "a") as f:
         f.write(str(int(time.time()*1000)) + "\n")
     return {"ok": True}
+
+

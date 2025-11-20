@@ -1,9 +1,9 @@
 # app/routers/sessions.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from pathlib import Path
-import os, json, uuid
+import os, json, uuid, time
 from typing import Optional
 
 router = APIRouter(prefix="/api/session", tags=["session"])
@@ -125,3 +125,30 @@ def finish_session(session_id: str):
     manifest["finished_at"] = _utcnow_iso()
     write_session_manifest(session_id, manifest)
     return {"status": "ok", "finished_at": manifest["finished_at"]}
+
+
+@router.post("/{session_id}/recording")
+async def upload_recording(
+    session_id: str,
+    recording: UploadFile = File(...),
+    problem_id: str = Form(...)
+):
+    """Upload a complete screen recording for a problem"""
+    session_dir = _session_dir(session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    
+    # Save with problem_id and timestamp in filename
+    timestamp = int(time.time() * 1000)
+    filename = f"recording_{problem_id}_{timestamp}.webm"
+    file_path = session_dir / filename
+    
+    content = await recording.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    return {
+        "ok": True,
+        "path": str(file_path),
+        "size": len(content),
+        "filename": filename
+    }
