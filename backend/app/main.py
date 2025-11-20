@@ -6,12 +6,16 @@ from app.routers.submissions_fe import router as fe_router
 from app.routers.submissions_dv import router as dv_router
 from app.routers.recording import router as rec_router
 from app.routers.survey import router as survey_router
+import os
 
 app = FastAPI(title="Research MVP")
 
+# Get CORS origins from environment variable
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
