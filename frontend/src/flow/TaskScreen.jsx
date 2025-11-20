@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ChatPanel from "../components/Chat/ChatPanel.jsx";
 import FEWorkbench from "../components/workbench/FEWorkbench.jsx";
-import DVWorkbench from "../components/workbench/DVWorkbench.jsx";
 import { logEvent } from '../lib/logger.js'
 import DVNotebook from '../components/workbench/DVNotebook';
 
@@ -32,6 +31,9 @@ export default function TaskScreen({ testType = "fe" }) {
   const [dvOutputById, setDvOutputById] = useState({});
   const intervalRef = useRef(null);
   const iframeRef = useRef(null);
+  
+  // For DV notebook: ref to get cells for submission
+  const notebookRef = useRef(null);
 
   const firstPreviewById = useRef({}); // to emit first_preview once per problem
 
@@ -147,6 +149,33 @@ export default function TaskScreen({ testType = "fe" }) {
   const submit = async () => {
     if (!active) return;
     const pid = active.id;
+    
+    // For DV notebook mode, get cells from notebook component
+    if (testType === 'dv' && notebookRef.current) {
+      const cells = notebookRef.current.getCells()
+      logEvent("submit_click", { problem_id: pid, cells: cells.length });
+      try {
+        const res = await fetch(`${API}/api/submissions/dvnb`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            session_id: sessionId, 
+            problem_id: pid, 
+            cells: cells.map(c => ({ source: c.source }))
+          })
+        });
+        if (!res.ok) { alert("Submit failed. Try again."); return; }
+        setSubmittedById(prev => ({ ...prev, [pid]: true }));
+        logEvent("submit_final", { problem_id: pid, cells: cells.length });
+        alert("Submitted!");
+      } catch (e) {
+        console.warn("submit error", e);
+        alert("Submit error.");
+      }
+      return;
+    }
+    
+    // For FE and legacy DV
     const code = codeById[pid] || "";
     logEvent("submit_click", { problem_id: pid, size: code.length });
     try {
@@ -390,56 +419,12 @@ export default function TaskScreen({ testType = "fe" }) {
               innerPct={innerPct}
               onDragInner={startDragInner}
             />
-            ) : import.meta.env.VITE_DV_NOTEBOOK === "1" ? (
+            ) : (
               <DVNotebook
+                ref={notebookRef}
                 sessionId={sessionId}
                 problem={active}
                 isSubmitted={submitted}
-              />
-            ) : (
-              <DVWorkbench
-                code={code}
-                onEdit={onEdit}
-                onRun={async () => {
-                  if (!active) return;
-                  const pid = active.id;
-                  const snippet = codeById[pid] || "";
-
-                  try {
-                    logEvent("run_click", {
-                      problem_id: pid,
-                      via: "dv",
-                    });
-                    const res = await fetch(
-                      `${API}/api/submissions/run/dv`,
-                      {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          session_id: sessionId,
-                          problem_id: pid,
-                          code: snippet,
-                        }),
-                      }
-                    );
-                    const data = await res.json();
-                    if (!res.ok)
-                      throw new Error(data.detail || "Run failed");
-                    setDvOutputById((prev) => ({
-                      ...prev,
-                      [pid]: data,
-                    }));
-                  } catch (e) {
-                    console.error("Run error:", e);
-                    alert("Failed to run code. Please try again.");
-                  }
-                }}
-                isSubmitted={submitted}
-                innerPct={innerPct}
-                onDragInner={startDragInner}
-                output={dvOutputById[active.id]}
               />
             )}
           </section>

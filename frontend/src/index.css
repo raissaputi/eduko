@@ -125,7 +125,7 @@ body{
 .left-scroll{
   flex:1; min-height:0; overflow:auto;
   display:grid; grid-template-rows: auto 1fr; /* problem | workbench */
-  gap:12px;
+  gap:16px;
 }
 
 /* Problem statement card */
@@ -137,7 +137,7 @@ body{
 .problem-bar .left{ flex:1 1 auto; min-width:0; }
 .problem-bar .title{ font-weight:700; margin-bottom:4px; }
 .problem-bar .statement{ color:var(--text-dim); line-height:1.6; word-break:break-word; white-space:pre-line; }
-.problem-bar .right{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }
+.problem-bar .right{ flex:0 0 auto; display:flex; align-items:center; gap:10px; }
 
 /* FE variant: sticky + internal grid (GIF + meta) */
 .problem-bar.fe-sticky { position:sticky; top:0; z-index:10; }
@@ -209,25 +209,30 @@ body{
   padding: 8px 10px; background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
-.nb-head-left{ display:flex; align-items:center; gap:8px; }
-.nb-head-right{ display:flex; align-items:center; gap:6px; }
+.nb-head-left{ display:flex; align-items:center; gap:10px; }
+.nb-head-right{ display:flex; align-items:center; gap:10px; }
 .nb-title{ font-size:12px; font-weight:600; opacity:.9; }
 .btn.icon{ width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:8px; }
 .nb-editor{ height: 220px; }
 .nb-output{ padding: 10px 12px; background:#0b0b0b; border-top:1px solid var(--border); }
 
-/* Bottom add button like Colab "+ Code" */
+/* Bottom add button - matches standard .btn style */
 .nb-add-row{
   display:flex; justify-content:center; padding:10px 0 16px;
 }
 .pill-add{
-  appearance:none; cursor:pointer; border:1px solid rgba(255,255,255,.2);
-  background:#2b2c34; color:#bcd6ff; font-weight:600;
-  padding:6px 12px; border-radius:999px; display:flex; align-items:center; gap:8px;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  appearance:none; cursor:pointer; 
+  border:1px solid var(--border);
+  background:#1b1b21; 
+  color:var(--text);
+  padding:8px 12px; 
+  border-radius:10px; 
+  display:flex; align-items:center; gap:6px;
+  font-size:14px;
+  transition: background 0.15s ease;
 }
 .pill-add .plus{ font-size:16px; line-height:1; }
-.pill-add:hover{ background:#30313a; border-color: rgba(255,255,255,.28); }
+.pill-add:hover{ background:#202029; }
 .pill-add:disabled{ opacity:.6; cursor:not-allowed; }
 
 /* Notebook body gutter for nicer left spacing */

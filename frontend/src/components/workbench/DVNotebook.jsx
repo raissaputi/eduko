@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
 import { logEvent } from '../../lib/logger'
 
@@ -8,7 +8,7 @@ function OutputView({ out }) {
   const { stdout, stderr, plot } = out || {}
   const hasAnything = (stdout && stdout.trim()) || (stderr && stderr.trim()) || plot
   if (!hasAnything) {
-    return <div className="empty-state">No output</div>
+    return null
   }
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -25,13 +25,23 @@ function OutputView({ out }) {
   )
 }
 
-export default function DVNotebook({ sessionId, problem, isSubmitted }) {
+const DVNotebook = forwardRef(({ sessionId, problem, isSubmitted }, ref) => {
   const [cells, setCells] = useState([
     { source: 'df.head()' , output: null, height: 40 },
   ])
   const bodyRef = useRef(null)
   const endRef = useRef(null)
   const editorRefs = useRef([])
+  
+  // Expose getCells method to parent via ref
+  useImperativeHandle(ref, () => ({
+    getCells: () => cells
+  }))
+  
+  // Reset notebook when problem changes
+  useEffect(() => {
+    setCells([{ source: 'df.head()', output: null, height: 40 }])
+  }, [problem?.id])
   
   const addCell = () => {
     setCells(cs => [...cs, { source:'', output:null, height: 40 }])
@@ -42,6 +52,20 @@ export default function DVNotebook({ sessionId, problem, isSubmitted }) {
   }
   const delCell = (idx) => setCells(cs => cs.filter((_,i)=>i!==idx))
   const updCell = (idx, src) => setCells(cs => cs.map((c,i)=> i===idx? {...c, source: src }: c))
+  
+  // Snapshot on every run (like FE snapshots)
+  const snapshotNotebook = async (trigger, cellIndex = null) => {
+    await fetch(`${API}/api/submissions/snapshots/dvnb`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionStorage.getItem('session_id') || 'anon',
+        problem_id: problem?.id ?? 'dv',
+        cells: cells.map(c => ({ source: c.source })),
+        trigger,
+        cell_index: cellIndex
+      })
+    }).catch(e => console.warn('Snapshot failed:', e))
+  }
 
   const runAll = async () => {
     const payload = {
@@ -51,6 +75,10 @@ export default function DVNotebook({ sessionId, problem, isSubmitted }) {
     }
     try {
       logEvent('run_click', { problem_id: payload.problem_id, via: 'dvnb_all', cells: payload.cells.length })
+      
+      // Snapshot every run (with diff tracking)
+      await snapshotNotebook('run_all', null)
+      
       const res = await fetch(`${API}/api/submissions/run/dvnb`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -75,6 +103,10 @@ export default function DVNotebook({ sessionId, problem, isSubmitted }) {
     }
     try {
       logEvent('run_click', { problem_id: payload.problem_id, via: 'dvnb_cell', index: idx })
+      
+      // Snapshot every run (with diff tracking)
+      await snapshotNotebook('run_cell', idx)
+      
       const res = await fetch(`${API}/api/submissions/run/dvnb`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -182,9 +214,11 @@ export default function DVNotebook({ sessionId, problem, isSubmitted }) {
                   }}
                 />
               </div>
-              <div className="nb-output">
-                <OutputView out={cell.output} />
-              </div>
+              {cell.output && (cell.output.stdout?.trim() || cell.output.stderr?.trim() || cell.output.plot) && (
+                <div className="nb-output">
+                  <OutputView out={cell.output} />
+                </div>
+              )}
             </div>
           ))}
           
@@ -200,4 +234,6 @@ export default function DVNotebook({ sessionId, problem, isSubmitted }) {
       </div>
     </div>
   )
-}
+})
+
+export default DVNotebook
