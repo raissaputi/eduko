@@ -66,57 +66,49 @@ def problems_dv():
         {
             "id": "dv1",
             "type": "DV",
-            "title": "DV #1: Temperature Trends",
-            "statement": """Create a line plot showing temperature trends over time.
-
-Sample data is provided below. Your task:
-1. Create a line plot using matplotlib
-2. Add proper title and axis labels
-3. Customize the line style and color
-4. Add a grid for better readability
-
-Use this starter code:""",
+            "title": "DV #1: Distribusi Wage berdasarkan Race dan Jobclass",
+            "statement": """Buatlah visualisasi boxplot seperti contoh di bawah ini yang menunjukkan distribusi wage berdasarkan race, dengan warna berbeda untuk tiap jobclass, lalu tambahkan scatter plot untuk setiap observasi dengan marker berbeda berdasarkan status health insurance (o untuk Yes, X untuk No).""",
             "starter_code": """import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 
-# Sample data
-months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-temperatures = [20, 22, 25, 27, 29, 31]
+# Load Wage dataset
+# Anda bisa menggunakan: from ISLR import Wage
+# atau load dari CSV jika tersedia
+
+# Batasi data menjadi 500 baris pertama
+df = df.head(500)
 
 # Your code here:
-plt.figure(figsize=(10, 6))
-# Create the line plot
-# Add labels and title
-# Customize the appearance"""
+# 1. Load data
+# 2. Prepare figure
+# 3. Create boxplot dengan hue jobclass
+# 4. Overlay scatter plot dengan marker berdasarkan health_ins
+# 5. Customize legend dan labels"""
             ,
-            "media_url": "/gifs/dv1-demo.gif"
+            "media_url": "/gifs/dv1-demo.png"
         },
         {
             "id": "dv2",
             "type": "DV",
-            "title": "DV #2: Sales Comparison",
-            "statement": """Create a bar chart comparing product sales.
-
-Your task:
-1. Create a bar chart showing sales by product
-2. Add value labels on top of each bar
-3. Use different colors for each category
-4. Add a legend and proper labels
-
-Use this starter code:""",
+            "title": "DV #2: Faktor-faktor Berpengaruh terhadap Wage",
+            "statement": """Visualisasikan faktor-faktor yang paling berpengaruh terhadap tingkat pendapatan (wage) pekerja dari tahun ke tahun!""",
             "starter_code": """import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
+import seaborn as sns
 
-# Sample data
-products = ['Laptop', 'Phone', 'Tablet', 'Watch']
-sales = [850, 1200, 400, 300]
+# Load Wage dataset
+# Anda bisa menggunakan: from ISLR import Wage
+# atau load dari CSV jika tersedia
+
+# Batasi data menjadi 500 baris pertama
+df = df.head(500)
 
 # Your code here:
-plt.figure(figsize=(10, 6))
-# Create the bar chart
-# Add value labels
-# Customize colors and add legend"""
-            ,
-            "media_url": "/gifs/dv2-demo.gif"
+# 1. Load data
+# 2. Analisis korelasi atau feature importance
+# 3. Visualisasikan tren wage per tahun dengan breakdown faktor
+# 4. Tambahkan interpretasi visual"""
         }
     ]

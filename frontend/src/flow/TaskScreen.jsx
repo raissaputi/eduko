@@ -25,6 +25,7 @@ export default function TaskScreen({ testType = "fe" }) {
   const dragInner = useRef({ on: false, startX: 0, startPct: 55 });
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [imageZoom, setImageZoom] = useState(false);
 
   const [codeById, setCodeById] = useState({});
   const [timeLeftById, setTimeLeftById] = useState({});
@@ -459,7 +460,7 @@ export default function TaskScreen({ testType = "fe" }) {
             return (
               <div className="problem-grid" style={{gridTemplateColumns: hasGif ? '280px 1fr' : '1fr'}}>
                 {hasGif && (
-                  <div className="problem-gif">
+                  <div className="problem-gif" onClick={() => setImageZoom(true)} style={{cursor: 'pointer'}}>
                     <img src={active.media_url} alt="Demo" />
                   </div>
                 )}
@@ -480,34 +481,48 @@ export default function TaskScreen({ testType = "fe" }) {
             );
           })() : (
             <>
-              <div className="left">
-                <div className="title">{active.title}</div>
-                {active.statement && <div className="statement">{active.statement}</div>}
-                {active.media_url && (
-                  <div className="media" style={{ marginTop: 8 }}>
-                    <img
-                      src={active.media_url}
-                      alt="Ilustrasi tugas"
-                      style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
-                    />
+              {active.media_url ? (
+                <div className="problem-grid" style={{gridTemplateColumns: '280px 1fr'}}>
+                  <div className="problem-gif" onClick={() => setImageZoom(true)} style={{cursor: 'pointer'}}>
+                    <img src={active.media_url} alt="Demo" />
                   </div>
-                )}
-              </div>
-              <div className="right">
-                <div className="timer">⏱ {formatMMSS(leftMs)}</div>
-                {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
-                {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
-                <button className="btn primary" onClick={submit} disabled={submitted}>
-                  {submitted ? "Submitted" : "Submit"}
-                </button>
-                <button
-                  className="btn"
-                  onClick={goNext}
-                  disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}
-                >
-                  {isLast ? "Finish → Survey" : "Next →"}
-                </button>
-              </div>
+                  <div className="problem-meta" style={{display:'flex', flexDirection:'column', gap:8}}>
+                    <div>
+                      <div className="title" style={{marginBottom:4}}>{active.title}</div>
+                      {active.statement && <div className="statement" style={{marginBottom:8}}>{active.statement}</div>}
+                    </div>
+                    <div style={{display:'flex', alignItems:'center', gap:10, marginTop:'auto'}}>
+                      <div className="timer">⏱ {formatMMSS(leftMs)}</div>
+                      {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
+                      {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
+                      <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
+                      <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="left">
+                    <div className="title">{active.title}</div>
+                    {active.statement && <div className="statement">{active.statement}</div>}
+                  </div>
+                  <div className="right">
+                    <div className="timer">⏱ {formatMMSS(leftMs)}</div>
+                    {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
+                    {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
+                    <button className="btn primary" onClick={submit} disabled={submitted}>
+                      {submitted ? "Submitted" : "Submit"}
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={goNext}
+                      disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}
+                    >
+                      {isLast ? "Finish → Survey" : "Next →"}
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </section>
@@ -589,6 +604,41 @@ export default function TaskScreen({ testType = "fe" }) {
               height: "100%",
               border: 0,
               background: "#fff",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Image Zoom Modal */}
+      {imageZoom && active?.media_url && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.9)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onClick={() => setImageZoom(false)}
+        >
+          <img
+            src={active.media_url}
+            alt="Demo (zoomed)"
+            style={{
+              maxWidth: "95%",
+              maxHeight: "95%",
+              objectFit: "contain",
+              cursor: "zoom-out",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setImageZoom(false);
             }}
           />
         </div>
