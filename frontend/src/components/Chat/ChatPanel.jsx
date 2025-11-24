@@ -198,6 +198,14 @@ export default function ChatPanel({ problem }) {
       textareaRef.current.style.overflowY = 'hidden'
     }
 
+    // Force scroll to bottom after sending
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+        isUserScrollingRef.current = false // Reset scroll state
+      }
+    }, 50)
+
     logEvent('chat_send', { problem_id: meta.problem_id, prompt_len: content.length })
 
     // basic metrics for logging
@@ -209,7 +217,8 @@ export default function ChatPanel({ problem }) {
     logEvent('chat_send', { problem_id: meta.problem_id, prompt_len: content.length, img_count: images.length, img_bytes_b64_len: totalImgBytes })
 
     // Build trimmed history (exclude images, keep roles/text only)
-    const MAX_HISTORY_CHARS = 8000
+    // Gemma 3 4B has 128K token context, so 50K chars (~12K tokens) is very safe
+    const MAX_HISTORY_CHARS = 50000
     let accChars = 0
     const trimmed = []
     // Iterate from end backwards to keep most recent context first

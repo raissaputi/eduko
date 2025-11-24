@@ -481,6 +481,19 @@ body{
   background: var(--surface-2);
 }
 
+/* Prevent accidental full selection when clicking in code blocks */
+.codewrap pre,
+.codewrap code {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.codewrap pre {
+  cursor: text;
+}
+
 .codehdr {
   display: flex;
   justify-content: space-between;

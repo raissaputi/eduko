@@ -20,10 +20,16 @@ class ScreenRecorder {
           height: { ideal: 1080 },
           frameRate: { ideal: 30 }
         },
-        audio: false, // Set to true if you want system audio
+        audio: false, // Disable audio capture
         preferCurrentTab: false, // Don't limit to current tab
         surfaceSwitching: 'exclude', // Prevent switching during recording
         selfBrowserSurface: 'exclude' // Exclude browser UI
+      });
+
+      // Remove any audio tracks if user selected them
+      this.stream.getAudioTracks().forEach(track => {
+        track.stop();
+        this.stream.removeTrack(track);
       });
 
       // Create MediaRecorder

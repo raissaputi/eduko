@@ -118,7 +118,16 @@ async def submit_dvnb(payload: DVNotebookPayload):
     ensure_session_test_type(payload.session_id, "dv")
 
     code_cells = [c.source for c in payload.cells or []]
-    results = run_dv_cells(code_cells)
+    
+    # Try to run cells, but don't fail submission if execution fails
+    try:
+        results = run_dv_cells(code_cells)
+    except Exception as e:
+        # If execution fails, save cells with error output
+        results = [
+            {"stdout": "", "stderr": f"Execution error: {str(e)}", "plot": None}
+            for _ in code_cells
+        ]
 
     # Save notebook as JSON in submit folder
     submit_folder = problem_dir(payload.session_id, payload.problem_id) / "submit"

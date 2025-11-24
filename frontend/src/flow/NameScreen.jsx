@@ -50,6 +50,7 @@ export default function NameScreen({ testType }) {
           <li>Kegiatan ini berdurasi sekitar <strong>1,5 jam</strong>, dengan waktu <strong>30 menit untuk setiap soal</strong>.</li>
           <li>Seluruh pengerjaan dilakukan melalui <strong>aplikasi yang telah terhubung dengan model bahasa (LLM)</strong>.</li>
           <li>Anda <strong>dipersilakan menggunakan LLM yang disediakan</strong> untuk membantu proses penyelesaian tugas.</li>
+          <li><strong>Jangan membuka resource lain</strong> (web apapun, AI/LLM lain) selama sesi berlangsung. <strong>Hanya gunakan aplikasi dan LLM yang disediakan</strong>.</li>
           <li>Seluruh <strong>interaksi, prompt, dan kode</strong> yang Anda tulis akan <strong>tersimpan secara otomatis</strong> selama sesi berlangsung.</li>
           <li>Data yang dikumpulkan <strong>bersifat rahasia</strong> dan <strong>hanya akan digunakan untuk kepentingan penelitian akademik</strong>.</li>
         </ul>

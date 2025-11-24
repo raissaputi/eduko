@@ -235,6 +235,10 @@ export default function TaskScreen({ testType = "fe" }) {
     if (!active) return;
     const pid = active.id;
     
+    // Confirm before submitting
+    const confirmed = window.confirm("Apakah Anda yakin ingin submit? Setelah submit, Anda tidak bisa mengubah jawaban lagi.");
+    if (!confirmed) return;
+    
     // For DV notebook mode, get cells from notebook component
     if (testType === 'dv' && notebookRef.current) {
       const cells = notebookRef.current.getCells()
