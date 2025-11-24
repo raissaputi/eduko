@@ -42,6 +42,7 @@ export default function TaskScreen({ testType = "fe" }) {
   // Screen recording
   const recorderRef = useRef(null);
   const [recordingStatus, setRecordingStatus] = useState('idle'); // idle | starting | recording | stopping | error
+  const recordingCounterRef = useRef(0); // Track how many recordings per problem
 
   // lightweight debounce for code_change
   const codeDebounceRef = useRef(null);
@@ -187,18 +188,21 @@ export default function TaskScreen({ testType = "fe" }) {
 
   // Helper to stop recording and upload
   const stopAndUploadRecording = async (problemId) => {
-    if (!recorderRef.current || recordingStatus !== 'recording') return;
+    if (!recorderRef.current) return;
     
     setRecordingStatus('stopping');
     logEvent("recording_stop", { problem_id: problemId });
     
     try {
-      const blob = await recorderRef.current.stop();
+      // Stop and upload final recording
+      recordingCounterRef.current += 1;
+      const { blob } = await recorderRef.current.stop();
       
       if (blob && blob.size > 0) {
-        // Upload recording to backend
+        // Upload final recording with proper naming
+        const filename = `recording_${problemId}_part${recordingCounterRef.current}_${Date.now()}.webm`;
         const formData = new FormData();
-        formData.append('recording', blob, `${problemId}_${Date.now()}.webm`);
+        formData.append('recording', blob, filename);
         formData.append('problem_id', problemId);
         
         await fetch(`${API}/api/sessions/${sessionId}/recording`, {
@@ -208,9 +212,14 @@ export default function TaskScreen({ testType = "fe" }) {
         
         logEvent("recording_uploaded", { 
           problem_id: problemId,
-          size_bytes: blob.size 
+          size_bytes: blob.size,
+          recording_number: recordingCounterRef.current,
+          is_final: true
         });
       }
+      
+      // Reset counter for next problem
+      recordingCounterRef.current = 0;
     } catch (error) {
       logEvent("recording_upload_error", { 
         problem_id: problemId,
@@ -338,27 +347,136 @@ export default function TaskScreen({ testType = "fe" }) {
 
     // Start screen recording when task begins
     const startRecording = async () => {
-      if (!recorderRef.current) {
-        recorderRef.current = new ScreenRecorder();
+      let attempts = 0;
+      const maxAttempts = 10; // Prevent infinite loop
+      
+      while (attempts < maxAttempts) {
+        attempts++;
+        
+        // Show instruction before triggering browser dialog
+        const confirmed = window.confirm(
+          "Pengaturan Rekaman Layar\n\n" +
+          "Pada dialog berikutnya:\n" +
+          "1. Klik tab 'Entire Screen' di bagian atas\n" +
+          "2. Pilih layar penuh Anda dari preview\n" +
+          "3. Klik tombol 'Share'\n\n" +
+          "Rekaman ini membantu kami memahami proses penyelesaian masalah Anda.\n\n" +
+          "Siap untuk melanjutkan?"
+        );
+        
+        if (!confirmed) {
+          // User clicked Cancel on instruction dialog - ask again
+          const retry = window.confirm(
+            "Rekaman layar diperlukan untuk berpartisipasi dalam penelitian ini.\n\n" +
+            "Apakah Anda ingin mencoba lagi?"
+          );
+          if (!retry) {
+            setRecordingStatus('error');
+            logEvent("recording_declined", { problem_id: active.id, attempts });
+            alert("Tidak dapat melanjutkan tanpa rekaman layar. Silakan refresh halaman untuk memulai ulang.");
+            return;
+          }
+          continue; // Ask again
+        }
+
+        if (!recorderRef.current) {
+          recorderRef.current = new ScreenRecorder();
+        }
+        
+        setRecordingStatus('starting');
+        
+        // Handler when user stops recording via browser button
+        const handleUserStopped = async (chunks) => {
+          // Upload current recording before restarting
+          recordingCounterRef.current += 1;
+          
+          if (chunks && chunks.length > 0) {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            
+            // Upload this segment with proper naming
+            const filename = `recording_${active.id}_part${recordingCounterRef.current}_${Date.now()}.webm`;
+            const formData = new FormData();
+            formData.append('recording', blob, filename);
+            formData.append('problem_id', active.id);
+            
+            fetch(`${API}/api/sessions/${sessionId}/recording`, {
+              method: 'POST',
+              body: formData
+            }).then(() => {
+              logEvent("recording_segment_uploaded", { 
+                problem_id: active.id,
+                recording_number: recordingCounterRef.current,
+                size_bytes: blob.size
+              });
+            }).catch(err => {
+              console.warn('Upload failed:', err);
+              logEvent("recording_segment_upload_failed", { 
+                problem_id: active.id,
+                recording_number: recordingCounterRef.current,
+                error: err.message
+              });
+            });
+          }
+          
+          setRecordingStatus('error');
+          logEvent("recording_stopped_by_user", { 
+            problem_id: active.id,
+            recording_number: recordingCounterRef.current
+          });
+          
+          // Immediately restart recording
+          setTimeout(() => {
+            alert(
+              "Rekaman layar telah dihentikan.\n\n" +
+              "Rekaman diperlukan selama sesi berlangsung.\n\n" +
+              "Silakan mulai rekaman kembali."
+            );
+            startRecording(); // Restart the whole flow
+          }, 100);
+        };
+        
+        const result = await recorderRef.current.start(handleUserStopped);
+        
+        if (result.success) {
+          setRecordingStatus('recording');
+          logEvent("recording_start", { 
+            problem_id: active.id,
+            session_id: sessionId,
+            attempts 
+          });
+          return; // Success - exit loop
+        } else {
+          // Failed (user cancelled browser dialog or error)
+          setRecordingStatus('idle');
+          logEvent("recording_failed_attempt", { 
+            problem_id: active.id,
+            error: result.error,
+            attempts 
+          });
+          
+          const retry = window.confirm(
+            "Pengaturan rekaman layar gagal.\n\n" +
+            "Ini mungkin terjadi jika Anda:\n" +
+            "- Klik Cancel\n" +
+            "- Memilih tab atau window alih-alih Entire Screen\n" +
+            "- Menolak izin\n\n" +
+            "Silakan coba lagi dan pastikan memilih 'Entire Screen'."
+          );
+          
+          if (!retry) {
+            setRecordingStatus('error');
+            logEvent("recording_declined", { problem_id: active.id, attempts });
+            alert("Tidak dapat melanjutkan tanpa rekaman layar. Silakan refresh halaman untuk memulai ulang.");
+            return;
+          }
+          // Loop will continue to ask again
+        }
       }
       
-      setRecordingStatus('starting');
-      const result = await recorderRef.current.start();
-      
-      if (result.success) {
-        setRecordingStatus('recording');
-        logEvent("recording_start", { 
-          problem_id: active.id,
-          session_id: sessionId 
-        });
-      } else {
-        setRecordingStatus('error');
-        logEvent("recording_error", { 
-          problem_id: active.id,
-          error: result.error 
-        });
-        console.warn('Recording failed:', result.error);
-      }
+      // Max attempts reached
+      setRecordingStatus('error');
+      logEvent("recording_max_attempts", { problem_id: active.id });
+      alert("Terlalu banyak percobaan gagal. Silakan refresh halaman dan coba lagi.");
     };
 
     startRecording();

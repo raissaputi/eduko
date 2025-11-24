@@ -9,7 +9,7 @@ class ScreenRecorder {
     this.isRecording = false;
   }
 
-  async start() {
+  async start(onUserStopped) {
     try {
       // Request screen capture with audio (optional)
       // preferCurrentTab: 'include' will auto-select current tab/window in Chrome
@@ -46,7 +46,21 @@ class ScreenRecorder {
 
       // Handle stream stop (user clicks browser's "Stop sharing" button)
       this.stream.getVideoTracks()[0].addEventListener('ended', () => {
-        this.stop();
+        // Stop MediaRecorder to finalize the chunks
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+          this.mediaRecorder.stop();
+        }
+        
+        this.isRecording = false;
+        
+        // Wait a bit for onstop to fire and chunks to be finalized
+        setTimeout(() => {
+          // Notify parent that user stopped recording with current chunks
+          if (onUserStopped) {
+            const savedChunks = [...this.chunks];
+            onUserStopped(savedChunks);
+          }
+        }, 100);
       });
 
       // Start recording with 1-second chunks for incremental upload
@@ -65,14 +79,17 @@ class ScreenRecorder {
     }
   }
 
-  stop() {
+  stop(keepChunks = false) {
     return new Promise((resolve) => {
       if (!this.mediaRecorder || !this.isRecording) {
-        resolve(null);
+        resolve({ blob: null, chunks: [] });
         return;
       }
 
       this.mediaRecorder.onstop = () => {
+        // Save chunks before clearing
+        const savedChunks = [...this.chunks];
+        
         // Create blob from all chunks
         const blob = new Blob(this.chunks, { type: 'video/webm' });
         
@@ -86,7 +103,7 @@ class ScreenRecorder {
         this.stream = null;
         this.chunks = [];
 
-        resolve(blob);
+        resolve({ blob, chunks: savedChunks });
       };
 
       this.mediaRecorder.stop();

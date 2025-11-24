@@ -131,10 +131,11 @@ async def upload_recording(
     problem_id: str = Form(...)
 ):
     """Upload a complete screen recording for a problem"""
-    # Save with problem_id and timestamp in filename
-    timestamp = int(time.time() * 1000)
-    filename = f"recording_{problem_id}_{timestamp}.webm"
-    path = f"sessions/{session_id}/{filename}"
+    # Use the filename from frontend (already formatted with part number)
+    filename = recording.filename or f"recording_{problem_id}_{int(time.time() * 1000)}.webm"
+    
+    # Save in subfolder per problem: recording_{problem_id}/
+    path = f"sessions/{session_id}/recording_{problem_id}/{filename}"
     
     content = await recording.read()
     storage_path = storage.write_file(path, content)
