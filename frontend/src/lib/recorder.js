@@ -12,14 +12,18 @@ class ScreenRecorder {
   async start() {
     try {
       // Request screen capture with audio (optional)
+      // preferCurrentTab: 'include' will auto-select current tab/window in Chrome
       this.stream = await navigator.mediaDevices.getDisplayMedia({
         video: { 
-          mediaSource: 'screen',
+          displaySurface: 'monitor', // Prefer full screen/monitor
           width: { ideal: 1920 },
           height: { ideal: 1080 },
           frameRate: { ideal: 30 }
         },
-        audio: false // Set to true if you want system audio
+        audio: false, // Set to true if you want system audio
+        preferCurrentTab: false, // Don't limit to current tab
+        surfaceSwitching: 'exclude', // Prevent switching during recording
+        selfBrowserSurface: 'exclude' // Exclude browser UI
       });
 
       // Create MediaRecorder

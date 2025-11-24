@@ -50,6 +50,39 @@ export default function TaskScreen({ testType = "fe" }) {
     codeDebounceRef.current = setTimeout(() => fn(...args), ms);
   };
 
+  // Tab switch detection and warning
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        logEvent("tab_hidden", { 
+          problem_id: active?.id,
+          timestamp: Date.now() 
+        });
+      } else {
+        logEvent("tab_visible", { 
+          problem_id: active?.id,
+          timestamp: Date.now() 
+        });
+      }
+    };
+
+    const handleBeforeUnload = (e) => {
+      // Warn user before leaving/closing the page
+      const message = "You have an ongoing task. Are you sure you want to leave?";
+      e.preventDefault();
+      e.returnValue = message; // Modern browsers
+      return message; // Older browsers
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [active?.id]);
+
   // Code persistence helpers
   const getCodeStorageKey = (problemId) => {
     return `code_${sessionId}_${testType}_${problemId}`;
@@ -208,11 +241,16 @@ export default function TaskScreen({ testType = "fe" }) {
           })
         });
         if (!res.ok) { alert("Submit failed. Try again."); return; }
-        setSubmittedById(prev => ({ ...prev, [pid]: true }));
-        logEvent("submit_final", { problem_id: pid, cells: cells.length });
+      setSubmittedById(prev => ({ ...prev, [pid]: true }));
+      logEvent("submit_final", { problem_id: pid, cells: cells.length });
         
         // Stop and upload recording
         await stopAndUploadRecording(pid);
+        
+        // Trigger compile_human after submission
+        fetch(`${API}/api/sessions/${sessionId}/compile`, {
+          method: 'POST'
+        }).catch(err => console.warn('Compile failed:', err));
         
         alert("Submitted!");
       } catch (e) {
@@ -237,6 +275,11 @@ export default function TaskScreen({ testType = "fe" }) {
       
       // Stop and upload recording
       await stopAndUploadRecording(pid);
+      
+      // Trigger compile_human after submission
+      fetch(`${API}/api/sessions/${sessionId}/compile`, {
+        method: 'POST'
+      }).catch(err => console.warn('Compile failed:', err));
       
       alert("Submitted!");
     } catch (e) {

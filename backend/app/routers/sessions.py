@@ -145,3 +145,24 @@ async def upload_recording(
         "size": len(content),
         "filename": filename
     }
+
+
+@router.post("/{session_id}/compile")
+def compile_session(session_id: str):
+    """Trigger human-readable log compilation for a session"""
+    from app.services.compile_human import compile_session_log
+    try:
+        # Run compile in background (this might take a few seconds)
+        import threading
+        def run_compile():
+            try:
+                compile_session_log(session_id)
+            except Exception as e:
+                print(f"Compile error for session {session_id}: {e}")
+        
+        thread = threading.Thread(target=run_compile)
+        thread.start()
+        
+        return {"ok": True, "message": "Compile started in background"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

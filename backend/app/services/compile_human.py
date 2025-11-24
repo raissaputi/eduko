@@ -13,9 +13,11 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
+from app.services.storage import get_storage
 
 
 DATA_ROOT = Path("data/sessions")
+storage = get_storage()
 
 
 # ---------- Public API ----------
@@ -66,14 +68,28 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
     Returns (full_log_path, {problem_id: event_log_path})
     """
     base = DATA_ROOT / session_id
-    src = base / "raw" / "events.jsonl"
+    events_path = f"sessions/{session_id}/raw/events.jsonl"
     dst = base / "log.txt"
 
-    if not src.exists():
+    if not storage.exists(events_path):
         print(f"[!] No events.jsonl found for {session_id}")
         return dst, {}
 
-    events = _read_events_sorted(src)
+    # Read events from storage
+    events = []
+    try:
+        content = storage.read_text(events_path)
+        for line in content.splitlines():
+            if line.strip():
+                try:
+                    events.append(json.loads(line))
+                except:
+                    continue
+    except Exception as e:
+        print(f"[!] Failed to read events: {e}")
+        return dst, {}
+    
+    events.sort(key=lambda x: x.get("client_ts", 0))
     if not events:
         print(f"[!] No valid events parsed for {session_id}")
         return dst, {}
@@ -130,14 +146,15 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
             lines_with_pid.append((line, pid))
 
     # write full log
-    dst.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"[✓] Compiled human log: {dst}")
+    log_path = f"sessions/{session_id}/log.txt"
+    storage.write_text(log_path, "\n".join(lines) + "\n")
+    print(f"[✓] Compiled human log: {log_path}")
     
     # write paste archive if any
     if paste_entries:
-        paste_file = base / "log_pastes.txt"
-        paste_file.write_text("\n".join(paste_entries), encoding="utf-8")
-        print(f"[✓] Compiled paste archive: {paste_file} ({paste_counter-1} pastes)")
+        paste_path = f"sessions/{session_id}/log_pastes.txt"
+        storage.write_text(paste_path, "\n".join(paste_entries))
+        print(f"[✓] Compiled paste archive: {paste_path} ({paste_counter-1} pastes)")
 
     # split events by problem
     per_paths: Dict[str, Path] = {}
@@ -150,9 +167,9 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
             grouped.setdefault(str(pid), []).append(line)
 
         for pid, plines in grouped.items():
-            ppath = base / f"log_problem_{pid}.txt"
-            ppath.write_text("\n".join(plines) + "\n", encoding="utf-8")
-            per_paths[pid] = ppath
+            problem_log_path = f"sessions/{session_id}/log_problem_{pid}.txt"
+            storage.write_text(problem_log_path, "\n".join(plines) + "\n")
+            per_paths[pid] = Path(problem_log_path)
 
         if per_paths:
             ids = ", ".join(sorted(per_paths.keys(), key=lambda x: str(x)))
