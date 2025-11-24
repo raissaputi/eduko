@@ -175,27 +175,85 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
             ids = ", ".join(sorted(per_paths.keys(), key=lambda x: str(x)))
             print(f"[✓] Per-problem event logs: {ids}")
 
-    # compile chat logs
-    problems_dir = base / "problems"
-    if problems_dir.exists():
-        # compile problem-specific chats
-        for problem_dir in problems_dir.iterdir():
-            if not problem_dir.is_dir():
+    # compile chat logs - use storage abstraction for S3 compatibility
+    problems_prefix = f"sessions/{session_id}/problems"
+    try:
+        # List subdirectories in problems/
+        problem_dirs = storage.list_dir(problems_prefix)
+        for problem_name in problem_dirs:
+            if not problem_name.endswith('/'):
                 continue
-                
-            chat_path = problem_dir / "chat.jsonl"
-            if chat_path.exists():
-                problem_id = problem_dir.name
-                out_path = base / f"log_chat_{problem_id}.txt"
-                _compile_chat_file(chat_path, out_path)
-                print(f"[✓] Compiled chat log for problem {problem_id}")
+            problem_id = problem_name.rstrip('/')
+            
+            chat_file_path = f"{problems_prefix}/{problem_id}/chat.jsonl"
+            if storage.exists(chat_file_path):
+                try:
+                    # Read chat content from storage
+                    chat_content = storage.read_text(chat_file_path)
+                    
+                    # Parse and compile chats
+                    lines = []
+                    chats = []
+                    for line in chat_content.splitlines():
+                        try:
+                            chat = json.loads(line)
+                            chats.append(chat)
+                        except:
+                            continue
+                    chats.sort(key=lambda x: x.get("client_ts", 0))
+                    
+                    for chat in chats:
+                        ts = _fmt_ts(chat.get("client_ts", 0))
+                        chat_id = chat.get("id", "unknown")
+                        problem = f" (Problem: {chat['problem_id']})" if chat.get("problem_id") else ""
+                        lines.extend([
+                            f"\n[{ts}] Chat {chat_id}{problem}",
+                            "User: " + chat.get("prompt", "(no prompt)"),
+                            "Assistant: " + chat.get("response", "(no response)"),
+                            ""
+                        ])
+                    
+                    if lines:
+                        out_path = f"sessions/{session_id}/log_chat_{problem_id}.txt"
+                        storage.write_text(out_path, "\n".join(lines))
+                        print(f"[✓] Compiled chat log for problem {problem_id}")
+                except Exception as e:
+                    print(f"[!] Failed to compile chat for {problem_id}: {e}")
+    except Exception as e:
+        print(f"[!] Failed to list problems directory: {e}")
     
     # compile general chats (without problem context)
-    general_chat = base / "raw" / "chat.jsonl"
-    if general_chat.exists():
-        out_path = base / "log_chat.txt"
-        _compile_chat_file(general_chat, out_path)
-        print(f"[✓] Compiled general chat log")
+    general_chat_path = f"sessions/{session_id}/raw/chat.jsonl"
+    if storage.exists(general_chat_path):
+        try:
+            chat_content = storage.read_text(general_chat_path)
+            lines = []
+            chats = []
+            for line in chat_content.splitlines():
+                try:
+                    chat = json.loads(line)
+                    chats.append(chat)
+                except:
+                    continue
+            chats.sort(key=lambda x: x.get("client_ts", 0))
+            
+            for chat in chats:
+                ts = _fmt_ts(chat.get("client_ts", 0))
+                chat_id = chat.get("id", "unknown")
+                problem = f" (Problem: {chat['problem_id']})" if chat.get("problem_id") else ""
+                lines.extend([
+                    f"\n[{ts}] Chat {chat_id}{problem}",
+                    "User: " + chat.get("prompt", "(no prompt)"),
+                    "Assistant: " + chat.get("response", "(no response)"),
+                    ""
+                ])
+            
+            if lines:
+                out_path = f"sessions/{session_id}/log_chat.txt"
+                storage.write_text(out_path, "\n".join(lines))
+                print(f"[✓] Compiled general chat log")
+        except Exception as e:
+            print(f"[!] Failed to compile general chat: {e}")
 
     return dst, per_paths
 
