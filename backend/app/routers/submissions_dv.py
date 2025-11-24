@@ -5,9 +5,16 @@ import time
 import json
 from pathlib import Path
 
-from app.services.writer import save_submit_final, append_event, ensure_dir, utc_now_iso, problem_dir
+from app.services.writer import (
+    save_submit_final, append_event, utc_now_iso, 
+    problem_path, runs_path, submit_path, diffs_path,
+    write_text, write_json
+)
+from app.services.storage import get_storage
 from app.routers.sessions import ensure_session_test_type
 from app.services.dv_runner import run_dv_code, run_dv_cells
+
+storage = get_storage()
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions-dv"])
 
@@ -129,9 +136,8 @@ async def submit_dvnb(payload: DVNotebookPayload):
             for _ in code_cells
         ]
 
-    # Save notebook as JSON in submit folder
-    submit_folder = problem_dir(payload.session_id, payload.problem_id) / "submit"
-    ensure_dir(submit_folder)
+    # Save notebook as JSON in submit folder (S3-compatible)
+    submit_base = submit_path(payload.session_id, payload.problem_id)
     
     notebook_data = {
         "timestamp": utc_now_iso(),
@@ -149,20 +155,20 @@ async def submit_dvnb(payload: DVNotebookPayload):
         ]
     }
     
-    notebook_path = submit_folder / "notebook.json"
-    with notebook_path.open("w", encoding="utf-8") as f:
-        json.dump(notebook_data, f, ensure_ascii=False, indent=2)
+    # Write notebook to storage
+    notebook_file = f"{submit_base}/notebook.json"
+    write_json(notebook_file, notebook_data)
 
     # Also save metadata
-    meta_path = submit_folder / "meta.json"
-    with meta_path.open("w", encoding="utf-8") as f:
-        json.dump({
-            "timestamp": utc_now_iso(),
-            "problem_id": payload.problem_id,
-            "cell_count": len(payload.cells),
-            "total_code_size": sum(len(c.source) for c in payload.cells),
-            "kind": "dvnb",
-        }, f, ensure_ascii=False, indent=2)
+    meta_data = {
+        "timestamp": utc_now_iso(),
+        "problem_id": payload.problem_id,
+        "cell_count": len(payload.cells),
+        "total_code_size": sum(len(c.source) for c in payload.cells),
+        "kind": "dvnb",
+    }
+    meta_file = f"{submit_base}/meta.json"
+    write_json(meta_file, meta_data)
 
     append_event(payload.session_id, {
         "event_type": "submission_saved_dvnb",
@@ -199,42 +205,41 @@ async def run_dv_notebook(payload: DVNotebookPayload):
     return DVNotebookResponse(cells=[DVCellOutput(**r) for r in results])
 
 
-# ---------- Helper: get next run index for notebook snapshots ----------
+# ---------- Helper: get next run index for notebook snapshots (S3-compatible) ----------
 
 def _next_nb_run_index(session_id: str, problem_id: str) -> int:
-    """Find next integer index for nb_run_XXXX folders."""
-    runs_root = problem_dir(session_id, problem_id) / "nb_runs"
-    if not runs_root.exists():
+    """Find next integer index for nb_run_XXXX folders using storage."""
+    nb_runs_prefix = f"{problem_path(session_id, problem_id)}/nb_runs"
+    try:
+        items = storage.list_dir(nb_runs_prefix)
+        max_idx = 0
+        for item in items:
+            if item.endswith('/') and item.startswith('nb_run_'):
+                try:
+                    idx = int(item.rstrip('/').split("_")[-1])
+                    max_idx = max(max_idx, idx)
+                except ValueError:
+                    continue
+        return max_idx + 1
+    except:
         return 1
-    max_idx = 0
-    for p in runs_root.iterdir():
-        if p.is_dir() and p.name.startswith("nb_run_"):
-            try:
-                idx = int(p.name.split("_")[-1])
-                max_idx = max(max_idx, idx)
-            except ValueError:
-                continue
-    return max_idx + 1
 
 
 def _get_latest_nb_snapshot(session_id: str, problem_id: str) -> dict | None:
-    """Get the most recent notebook snapshot for diff comparison."""
-    runs_root = problem_dir(session_id, problem_id) / "nb_runs"
-    if not runs_root.exists():
-        return None
-    
-    all_runs = sorted([p for p in runs_root.iterdir() if p.is_dir() and p.name.startswith("nb_run_")])
-    if not all_runs:
-        return None
-    
-    latest = all_runs[-1]
-    notebook_path = latest / "notebook.json"
-    if not notebook_path.exists():
-        return None
-    
+    """Get the most recent notebook snapshot for diff comparison using storage."""
+    nb_runs_prefix = f"{problem_path(session_id, problem_id)}/nb_runs"
     try:
-        with notebook_path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+        items = storage.list_dir(nb_runs_prefix)
+        all_runs = sorted([item.rstrip('/') for item in items if item.endswith('/') and item.startswith('nb_run_')])
+        if not all_runs:
+            return None
+        
+        latest = all_runs[-1]
+        notebook_file = f"{nb_runs_prefix}/{latest}/notebook.json"
+        if not storage.exists(notebook_file):
+            return None
+        
+        return storage.read_json(notebook_file)
     except Exception:
         return None
 
@@ -291,8 +296,7 @@ async def snapshot_dvnb(payload: DVNotebookSnapshotPayload):
     prev_snapshot = _get_latest_nb_snapshot(payload.session_id, payload.problem_id)
     
     run_idx = _next_nb_run_index(payload.session_id, payload.problem_id)
-    run_folder = problem_dir(payload.session_id, payload.problem_id) / "nb_runs" / f"nb_run_{run_idx:04d}"
-    ensure_dir(run_folder)
+    run_folder = f"{problem_path(payload.session_id, payload.problem_id)}/nb_runs/nb_run_{run_idx:04d}"
 
     current_cells = [{"source": c.source} for c in payload.cells]
     
@@ -302,57 +306,51 @@ async def snapshot_dvnb(payload: DVNotebookSnapshotPayload):
         diff_stats = _compute_nb_diff(prev_snapshot, current_cells)
         
         # Save diff summary as JSON
-        diff_path = run_folder / "diff.json"
-        with diff_path.open("w", encoding="utf-8") as f:
-            json.dump({
-                "from_run": prev_snapshot.get("run_index"),
-                "to_run": run_idx,
-                "timestamp": utc_now_iso(),
-                **diff_stats
-            }, f, ensure_ascii=False, indent=2)
+        diff_file = f"{run_folder}/diff.json"
+        write_json(diff_file, {
+            "from_run": prev_snapshot.get("run_index"),
+            "to_run": run_idx,
+            "timestamp": utc_now_iso(),
+            **diff_stats
+        })
         
         # Save human-readable changes log
-        changes_path = run_folder / "changes.txt"
-        with changes_path.open("w", encoding="utf-8") as f:
-            f.write(f"Run #{run_idx:04d} - {utc_now_iso()}\n")
-            f.write("=" * 60 + "\n\n")
+        changes_text = []
+        changes_text.append(f"Run #{run_idx:04d} - {utc_now_iso()}")
+            changes_text.append(f"Trigger: {payload.trigger}")
+        changes_text.append(f"Total cells: {len(current_cells)}\n")
+        
+        # Describe changes
+        if diff_stats["total_changes"] == 0:
+            changes_text.append("No changes since last run.")
+        else:
+            changes_text.append("Changes since last run:")
+            if diff_stats["added_cells"] > 0:
+                changes_text.append(f"  + Added {diff_stats['added_cells']} cell(s)")
+            if diff_stats["removed_cells"] > 0:
+                changes_text.append(f"  - Removed {diff_stats['removed_cells']} cell(s)")
+            if diff_stats["modified_cells"]:
+                changes_text.append(f"  ✎ Modified cells: {', '.join(f'[{i+1}]' for i in diff_stats['modified_cells'])}")
+        
+        changes_text.append("\n" + "=" * 60)
+        changes_text.append("Cell contents:\n")
+        
+        # Show all cells with their content
+        for i, cell in enumerate(current_cells):
+            marker = ""
+            if diff_stats["modified_cells"] and i in diff_stats["modified_cells"]:
+                marker = " ✎ MODIFIED"
+            elif prev_snapshot and i >= len(prev_snapshot.get("cells", [])):
+                marker = " ✨ NEW"
             
-            # Describe trigger
-            if payload.trigger == "run_all":
-                f.write("Trigger: Run All ▶\n")
-            elif payload.trigger == "run_cell" and payload.cell_index is not None:
-                f.write(f"Trigger: Run Cell [{payload.cell_index + 1}] ▶\n")
-            else:
-                f.write(f"Trigger: {payload.trigger}\n")
-            f.write(f"Total cells: {len(current_cells)}\n\n")
-            
-            # Describe changes
-            if diff_stats["total_changes"] == 0:
-                f.write("No changes since last run.\n")
-            else:
-                f.write("Changes since last run:\n")
-                if diff_stats["added_cells"] > 0:
-                    f.write(f"  + Added {diff_stats['added_cells']} cell(s)\n")
-                if diff_stats["removed_cells"] > 0:
-                    f.write(f"  - Removed {diff_stats['removed_cells']} cell(s)\n")
-                if diff_stats["modified_cells"]:
-                    f.write(f"  ✎ Modified cells: {', '.join(f'[{i+1}]' for i in diff_stats['modified_cells'])}\n")
-            
-            f.write("\n" + "=" * 60 + "\n")
-            f.write("Cell contents:\n\n")
-            
-            # Show all cells with their content
-            for i, cell in enumerate(current_cells):
-                marker = ""
-                if diff_stats["modified_cells"] and i in diff_stats["modified_cells"]:
-                    marker = " ✎ MODIFIED"
-                elif prev_snapshot and i >= len(prev_snapshot.get("cells", [])):
-                    marker = " ✨ NEW"
-                
-                f.write(f"Cell [{i + 1}]{marker}:\n")
-                f.write("-" * 40 + "\n")
-                f.write(cell["source"] or "(empty)")
-                f.write("\n\n")
+            changes_text.append(f"Cell [{i + 1}]{marker}:")
+            changes_text.append("-" * 40)
+            changes_text.append(cell["source"] or "(empty)")
+            changes_text.append("")
+        
+        # Write changes file
+        changes_file = f"{run_folder}/changes.txt"
+        write_text(changes_file, "\n".join(changes_text))
 
     # Save notebook state as JSON
     snapshot_data = {
@@ -363,9 +361,8 @@ async def snapshot_dvnb(payload: DVNotebookSnapshotPayload):
         "cells": current_cells,
     }
     
-    snapshot_path = run_folder / "notebook.json"
-    with snapshot_path.open("w", encoding="utf-8") as f:
-        json.dump(snapshot_data, f, ensure_ascii=False, indent=2)
+    snapshot_file = f"{run_folder}/notebook.json"
+    write_json(snapshot_file, snapshot_data)
 
     # Log event with diff stats
     event_payload = {
