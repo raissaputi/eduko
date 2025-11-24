@@ -10,7 +10,7 @@ export default function NameScreen({ testType }) {
 
   async function start() {
   if (!name.trim() || !consent) return;
-    const res = await fetch(`${API}/api/session/start`, {
+    const res = await fetch(`${API}/api/sessions/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ name, test: testType, consent: true })
