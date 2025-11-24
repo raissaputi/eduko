@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 import os, json, uuid, time
 from typing import Optional
+from app.services.storage import get_storage
 
-router = APIRouter(prefix="/api/session", tags=["session"])
+router = APIRouter(prefix="/api/sessions", tags=["session"])
+storage = get_storage()
 
 DATA_ROOT = Path("data") / "sessions"
 
@@ -35,21 +37,18 @@ def _utcnow_iso() -> str:
 
 def read_session_manifest(session_id: str) -> dict | None:
     """Return manifest dict or None if not found."""
-    path = _session_path(session_id)
-    if not path.exists():
+    path = f"sessions/{session_id}/session.json"
+    if not storage.exists(path):
         return None
     try:
-        with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+        return storage.read_json(path)
     except Exception:
         return None
 
 
 def write_session_manifest(session_id: str, data: dict) -> None:
-    path = _session_path(session_id)
-    os.makedirs(path.parent, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    path = f"sessions/{session_id}/session.json"
+    storage.write_json(path, data)
 
 
 def ensure_session_test_type(session_id: str, intended_type: str) -> dict:
@@ -90,8 +89,6 @@ def start_session(data: StartIn):
     This locks the session to a single test_type ("fe" or "dv").
     """
     sid = str(uuid.uuid4())
-    base = _session_dir(sid)
-    os.makedirs(base, exist_ok=True)
 
     manifest = {
         "session_id": sid,
@@ -134,21 +131,17 @@ async def upload_recording(
     problem_id: str = Form(...)
 ):
     """Upload a complete screen recording for a problem"""
-    session_dir = _session_dir(session_id)
-    os.makedirs(session_dir, exist_ok=True)
-    
     # Save with problem_id and timestamp in filename
     timestamp = int(time.time() * 1000)
     filename = f"recording_{problem_id}_{timestamp}.webm"
-    file_path = session_dir / filename
+    path = f"sessions/{session_id}/{filename}"
     
     content = await recording.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    storage_path = storage.write_file(path, content)
     
     return {
         "ok": True,
-        "path": str(file_path),
+        "path": storage_path,
         "size": len(content),
         "filename": filename
     }

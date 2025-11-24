@@ -12,6 +12,10 @@ from uuid import uuid4
 import difflib
 import base64
 
+from app.services.storage import get_storage
+
+storage = get_storage()
+
 
 # ---------- Paths & FS helpers ----------
 
@@ -209,11 +213,16 @@ def save_diff_between_runs(session_id: str,
 def append_event(session_id: str, record: Dict[str, Any]) -> None:
     """
     Append a telemetry record to:
-      data/sessions/<sid>/raw/events.jsonl
+      sessions/<sid>/raw/events.jsonl
     This does not enforce schema; caller should supply proper fields.
     """
-    events_path = raw_dir(session_id) / "events.jsonl"
-    append_jsonl(events_path, record)
+    # Add server metadata
+    record = dict(record)
+    record.setdefault("server_ts", utc_now_iso())
+    record.setdefault("event_id", str(uuid4()))
+    
+    path = f"sessions/{session_id}/raw/events.jsonl"
+    storage.append_jsonl(path, record)
 
 
 def append_chat_raw(session_id: str, record: Dict[str, Any]) -> None:
