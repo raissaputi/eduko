@@ -60,6 +60,7 @@ export default function ChatPanel({ problem }) {
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const textareaRef = useRef(null)
+  const isUserScrollingRef = useRef(false)
 
   // Chat persistence helpers
   const getChatKey = () => {
@@ -105,11 +106,34 @@ export default function ChatPanel({ problem }) {
     }
   }, [messages])
 
-  // autoscroll
+  // Smart autoscroll - only scroll if user is already near bottom
   useEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    if (!el) return
+
+    // Check if user is near bottom (within 100px)
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+
+    // Only auto-scroll if user hasn't manually scrolled up
+    if (isNearBottom && !isUserScrollingRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }
   }, [messages])
+
+  // Track user scrolling
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const handleScroll = () => {
+      const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+      // User is scrolling up if not near bottom
+      isUserScrollingRef.current = !isNearBottom
+    }
+
+    el.addEventListener('scroll', handleScroll)
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [])
 
   // connect WS once
   useEffect(() => {
