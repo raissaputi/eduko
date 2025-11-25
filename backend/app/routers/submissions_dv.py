@@ -317,7 +317,7 @@ async def snapshot_dvnb(payload: DVNotebookSnapshotPayload):
         # Save human-readable changes log
         changes_text = []
         changes_text.append(f"Run #{run_idx:04d} - {utc_now_iso()}")
-            changes_text.append(f"Trigger: {payload.trigger}")
+        changes_text.append(f"Trigger: {payload.trigger}")
         changes_text.append(f"Total cells: {len(current_cells)}\n")
         
         # Describe changes
