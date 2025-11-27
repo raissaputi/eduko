@@ -9,9 +9,12 @@ from app.services.writer import (
     save_run_snapshot,
     save_diff_between_runs,
     append_event,
-    raw_dir,
+    runs_path,
 )
+from app.services.storage import get_storage
 from app.routers.sessions import ensure_session_test_type
+
+storage = get_storage()
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions-fe"])
 
@@ -24,18 +27,25 @@ class SubmissionPayload(BaseModel):
     code: str
 
 
-# ---------- Helper: get latest run for diff ----------
+# ---------- Helper: get latest run for diff (S3-compatible) ----------
 
 def _latest_run_code(session_id: str, problem_id: str) -> str | None:
-    runs_root = raw_dir(session_id).parent / "problems" / str(problem_id) / "runs"
-    if not runs_root.exists():
+    """Get code from most recent run snapshot using storage API."""
+    runs_prefix = runs_path(session_id, problem_id)
+    try:
+        items = storage.list_dir(runs_prefix)
+        all_runs = sorted([item.rstrip('/') for item in items if item.endswith('/') and item.startswith('run_')])
+        if not all_runs:
+            return None
+        
+        latest = all_runs[-1]
+        code_file = f"{runs_prefix}/{latest}/code.html"
+        
+        if storage.exists(code_file):
+            return storage.read_text(code_file)
         return None
-    all_runs = sorted(p for p in runs_root.iterdir() if p.is_dir())
-    if not all_runs:
+    except Exception:
         return None
-    latest = all_runs[-1]
-    code_path = latest / "code.html"
-    return code_path.read_text(encoding="utf-8") if code_path.exists() else None
 
 
 # ---------- Final submission ----------
