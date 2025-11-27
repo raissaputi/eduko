@@ -1,9 +1,11 @@
 # app/services/llm.py
 import os
 import asyncio
+import time
 from typing import AsyncGenerator, Dict, List, Optional, Any
 
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "models/gemma-3-4b-it")  # any valid model id
@@ -81,21 +83,53 @@ class GeminiProvider:
     async def stream(self, messages: List[ChatMsg]) -> AsyncGenerator[str, None]:
         def _sync_iter():
             model = genai.GenerativeModel(self.model_name)
-            # If single user turn without images → send string for efficiency
-            if (
-                len(messages) == 1 and messages[0].get("role") == "user"
-                and not messages[0].get("images") and messages[0].get("text")
-            ):
-                resp = model.generate_content(messages[0]["text"], stream=True)
-            else:
-                resp = model.generate_content(self._to_chat(messages), stream=True)
-            for ev in resp:
+            max_retries = 3
+            retry_count = 0
+            
+            while retry_count <= max_retries:
                 try:
-                    if chunk := getattr(ev, "text", None):
-                        yield chunk
-                except ValueError:
-                    # Skip any problematic chunks but continue streaming
-                    continue
+                    # If single user turn without images → send string for efficiency
+                    if (
+                        len(messages) == 1 and messages[0].get("role") == "user"
+                        and not messages[0].get("images") and messages[0].get("text")
+                    ):
+                        resp = model.generate_content(messages[0]["text"], stream=True)
+                    else:
+                        resp = model.generate_content(self._to_chat(messages), stream=True)
+                    
+                    for ev in resp:
+                        try:
+                            if chunk := getattr(ev, "text", None):
+                                yield chunk
+                        except ValueError:
+                            # Skip any problematic chunks but continue streaming
+                            continue
+                    # Success - break out of retry loop
+                    break
+                    
+                except ResourceExhausted as e:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        # Give up and raise the original error
+                        raise Exception(f"Rate limit exceeded after {max_retries} retries. Please try again in a minute.")
+                    
+                    # Extract retry delay from error message or use default
+                    retry_delay = 20  # Default 20 seconds
+                    error_str = str(e)
+                    if "retry in" in error_str.lower():
+                        try:
+                            # Try to parse "Please retry in X.XXs"
+                            import re
+                            match = re.search(r'retry in ([\d.]+)s', error_str)
+                            if match:
+                                retry_delay = float(match.group(1)) + 1  # Add 1 sec buffer
+                        except:
+                            pass
+                    
+                    print(f"[LLM] Rate limit hit, retrying in {retry_delay}s (attempt {retry_count}/{max_retries})")
+                    # Send a message to the user that we're retrying
+                    yield f"⏳ Rate limit reached. Retrying in {int(retry_delay)} seconds... (attempt {retry_count}/{max_retries})\n\n"
+                    time.sleep(retry_delay)
 
         loop = asyncio.get_event_loop()
         q: asyncio.Queue[str] = asyncio.Queue()
@@ -104,6 +138,9 @@ class GeminiProvider:
             try:
                 for tok in _sync_iter():
                     asyncio.run_coroutine_threadsafe(q.put(tok), loop)
+            except Exception as e:
+                # Send error to queue so it gets raised in the async context
+                asyncio.run_coroutine_threadsafe(q.put(f"__ERROR__:{str(e)}"), loop)
             finally:
                 asyncio.run_coroutine_threadsafe(q.put("__DONE__"), loop)
 
@@ -114,6 +151,9 @@ class GeminiProvider:
             tok = await q.get()
             if tok == "__DONE__":
                 break
+            if isinstance(tok, str) and tok.startswith("__ERROR__:"):
+                error_msg = tok[len("__ERROR__:"):]
+                raise Exception(error_msg)
             yield tok
 
     async def complete(self, messages: List[ChatMsg]) -> str:

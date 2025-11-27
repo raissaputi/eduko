@@ -257,15 +257,16 @@ export default function TaskScreen({ testType = "fe" }) {
       setSubmittedById(prev => ({ ...prev, [pid]: true }));
       logEvent("submit_final", { problem_id: pid, cells: cells.length });
         
-        // Stop and upload recording
-        await stopAndUploadRecording(pid);
+        // Show success immediately
+        alert("Submitted!");
+        
+        // Stop and upload recording in background (non-blocking)
+        stopAndUploadRecording(pid).catch(err => console.warn('Recording upload failed:', err));
         
         // Trigger compile_human after submission
         fetch(`${API}/api/sessions/${sessionId}/compile`, {
           method: 'POST'
         }).catch(err => console.warn('Compile failed:', err));
-        
-        alert("Submitted!");
       } catch (e) {
         console.warn("submit error", e);
         alert("Submit error.");
@@ -286,15 +287,16 @@ export default function TaskScreen({ testType = "fe" }) {
       setSubmittedById(prev => ({ ...prev, [pid]: true }));
       logEvent("submit_final", { problem_id: pid, size: code.length });
       
-      // Stop and upload recording
-      await stopAndUploadRecording(pid);
+      // Show success immediately
+      alert("Submitted!");
+      
+      // Stop and upload recording in background (non-blocking)
+      stopAndUploadRecording(pid).catch(err => console.warn('Recording upload failed:', err));
       
       // Trigger compile_human after submission
       fetch(`${API}/api/sessions/${sessionId}/compile`, {
         method: 'POST'
       }).catch(err => console.warn('Compile failed:', err));
-      
-      alert("Submitted!");
     } catch (e) {
       console.warn("submit error", e);
       alert("Submit error.");
