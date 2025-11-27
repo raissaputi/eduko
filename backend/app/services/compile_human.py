@@ -119,7 +119,9 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
             pid = _extract_problem_id(ev) or current_problem
             
             # Add to main log with reference ID
-            ts = _fmt_ts(ev.get("_ts", 0))
+            # Try multiple timestamp fields: client_ts, server_ts, _ts
+            ts_ms = ev.get("client_ts") or ev.get("server_ts") or ev.get("_ts", 0)
+            ts = _fmt_ts(ts_ms)
             cell_info = f" cell={cell_idx}" if cell_idx is not None else ""
             prob_info = f" problem={pid}" if pid else ""
             line = f"[{ts}] CODE_PASTE id={paste_id} len={length} kind={kind}{cell_info}{prob_info}"
@@ -295,7 +297,9 @@ def _pretty_line(ev: Dict[str, Any]) -> str:
     """Turn one raw event into a compact human-readable line."""
     etype = str(ev.get("event_type", "")).upper()
     payload = ev.get("payload") or {}
-    ts = _fmt_ts(ev.get("_ts", 0))
+    # Try multiple timestamp fields: client_ts, server_ts, _ts
+    ts_ms = ev.get("client_ts") or ev.get("server_ts") or ev.get("_ts", 0)
+    ts = _fmt_ts(ts_ms)
     tail = _summarize_event(etype.lower(), payload)
     return f"[{ts}] {etype}{(' ' + tail) if tail else ''}".rstrip()
 
