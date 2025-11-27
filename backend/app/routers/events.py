@@ -84,11 +84,9 @@ async def log_bulk(body: EventsBulkIn):
 
 # ---------- Internal helpers ----------
 
-from pathlib import Path
-from app.services.writer import raw_dir
-
-def _events_path(session_id: str) -> Path:
-    return raw_dir(session_id) / "events.jsonl"
+def _events_path(session_id: str) -> str:
+    """Return storage path for events.jsonl"""
+    return f"sessions/{session_id}/raw/events.jsonl"
 
 
 def _guess_type_from_event(name: str) -> Optional[str]:
