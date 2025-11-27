@@ -88,7 +88,9 @@ async def snapshot_fe(payload: SubmissionPayload):
 
     if prev_code:
         try:
-            idx_to = int(run_path.name.split("_")[1])
+            # Extract run index from path string (format: "sessions/{id}/problems/{pid}/runs/run_0001")
+            run_folder_name = run_path.split('/')[-1]  # "run_0001"
+            idx_to = int(run_folder_name.split("_")[1])
             save_diff_between_runs(
                 payload.session_id,
                 payload.problem_id,
@@ -110,4 +112,4 @@ async def snapshot_fe(payload: SubmissionPayload):
         "client_ts": int(time.time() * 1000),
     })
 
-    return {"status": "ok", "saved": run_path.name}
+    return {"status": "ok", "saved": run_path.split('/')[-1]}
