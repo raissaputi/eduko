@@ -188,7 +188,11 @@ export default function TaskScreen({ testType = "fe" }) {
 
   // Helper to stop recording and upload
   const stopAndUploadRecording = async (problemId) => {
-    if (!recorderRef.current) return;
+    if (!recorderRef.current) {
+      console.warn('[Recording] No recorder ref, skipping upload');
+      logEvent("recording_no_ref", { problem_id: problemId });
+      return;
+    }
     
     setRecordingStatus('stopping');
     logEvent("recording_stop", { problem_id: problemId });
@@ -198,34 +202,53 @@ export default function TaskScreen({ testType = "fe" }) {
       recordingCounterRef.current += 1;
       const { blob } = await recorderRef.current.stop();
       
-      if (blob && blob.size > 0) {
-        // Upload final recording with proper naming
-        const filename = `recording_${problemId}_part${recordingCounterRef.current}_${Date.now()}.webm`;
-        const formData = new FormData();
-        formData.append('recording', blob, filename);
-        formData.append('problem_id', problemId);
-        
-        await fetch(`${API}/api/sessions/${sessionId}/recording`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        logEvent("recording_uploaded", { 
-          problem_id: problemId,
-          size_bytes: blob.size,
-          recording_number: recordingCounterRef.current,
-          is_final: true
-        });
+      console.log('[Recording] Stopped, blob size:', blob ? blob.size : 'null');
+      
+      if (!blob) {
+        console.warn('[Recording] No blob returned from recorder');
+        logEvent("recording_no_blob", { problem_id: problemId });
+        return;
       }
+      
+      if (blob.size === 0) {
+        console.warn('[Recording] Blob is empty (0 bytes)');
+        logEvent("recording_empty_blob", { problem_id: problemId });
+        return;
+      }
+      
+      // Upload final recording with proper naming
+      const filename = `recording_${problemId}_part${recordingCounterRef.current}_${Date.now()}.webm`;
+      const formData = new FormData();
+      formData.append('recording', blob, filename);
+      formData.append('problem_id', problemId);
+      
+      console.log('[Recording] Uploading:', filename, 'Size:', blob.size);
+      
+      const response = await fetch(`${API}/api/sessions/${sessionId}/recording`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+      
+      console.log('[Recording] Upload successful');
+      logEvent("recording_uploaded", { 
+        problem_id: problemId,
+        size_bytes: blob.size,
+        recording_number: recordingCounterRef.current,
+        is_final: true
+      });
       
       // Reset counter for next problem
       recordingCounterRef.current = 0;
     } catch (error) {
+      console.error('[Recording] Upload error:', error);
       logEvent("recording_upload_error", { 
         problem_id: problemId,
         error: error.message 
       });
-      console.warn('Recording upload failed:', error);
     } finally {
       setRecordingStatus('idle');
     }
