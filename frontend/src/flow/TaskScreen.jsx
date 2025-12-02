@@ -43,6 +43,7 @@ export default function TaskScreen({ testType = "fe" }) {
   const recorderRef = useRef(null);
   const [recordingStatus, setRecordingStatus] = useState('idle'); // idle | starting | recording | stopping | error
   const recordingCounterRef = useRef(0); // Track how many recordings per problem
+  const [uploadingRecording, setUploadingRecording] = useState(false); // NEW: Track upload in progress
 
   // lightweight debounce for code_change
   const codeDebounceRef = useRef(null);
@@ -187,6 +188,7 @@ export default function TaskScreen({ testType = "fe" }) {
   };
 
   // Helper to stop recording and upload
+  // Helper to stop recording and upload (BLOCKING)
   const stopAndUploadRecording = async (problemId) => {
     if (!recorderRef.current) {
       console.warn('[Recording] No recorder ref, skipping upload');
@@ -195,6 +197,7 @@ export default function TaskScreen({ testType = "fe" }) {
     }
     
     setRecordingStatus('stopping');
+    setUploadingRecording(true); // NEW: Start upload
     logEvent("recording_stop", { problem_id: problemId });
     
     try {
@@ -251,6 +254,7 @@ export default function TaskScreen({ testType = "fe" }) {
       });
     } finally {
       setRecordingStatus('idle');
+      setUploadingRecording(false); // NEW: Upload complete
     }
   };
 
@@ -284,7 +288,8 @@ export default function TaskScreen({ testType = "fe" }) {
         alert("Submitted!");
         
         // Stop and upload recording in background (non-blocking)
-        stopAndUploadRecording(pid).catch(err => console.warn('Recording upload failed:', err));
+        // stopAndUploadRecording(pid).catch(err => console.warn('Recording upload failed:', err));
+        await stopAndUploadRecording(pid);
         
         // Trigger compile_human after submission
         fetch(`${API}/api/sessions/${sessionId}/compile`, {
@@ -313,8 +318,8 @@ export default function TaskScreen({ testType = "fe" }) {
       // Show success immediately
       alert("Submitted!");
       
-      // Stop and upload recording in background (non-blocking)
-      stopAndUploadRecording(pid).catch(err => console.warn('Recording upload failed:', err));
+      // Stop and upload recording (BLOCKING - wait for completion)
+      await stopAndUploadRecording(pid); // NEW: Changed from .catch() to await
       
       // Trigger compile_human after submission
       fetch(`${API}/api/sessions/${sessionId}/compile`, {
@@ -663,8 +668,9 @@ export default function TaskScreen({ testType = "fe" }) {
                     <div className="timer">⏱ {formatMMSS(leftMs)}</div>
                     {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
                     {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
+                    {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
                     <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
-                    <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
+                    <button className="btn" onClick={goNext} disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}>{isLast ? 'Finish → Survey':'Next →'}</button>
                   </div>
                 </div>
               </div>
@@ -685,8 +691,9 @@ export default function TaskScreen({ testType = "fe" }) {
                       <div className="timer">⏱ {formatMMSS(leftMs)}</div>
                       {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
                       {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
+                      {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
                       <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
-                      <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
+                      <button className="btn" onClick={goNext} disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}>{isLast ? 'Finish → Survey':'Next →'}</button>
                     </div>
                   </div>
                 </div>
@@ -700,13 +707,14 @@ export default function TaskScreen({ testType = "fe" }) {
                     <div className="timer">⏱ {formatMMSS(leftMs)}</div>
                     {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
                     {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
+                    {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
                     <button className="btn primary" onClick={submit} disabled={submitted}>
                       {submitted ? "Submitted" : "Submit"}
                     </button>
                     <button
                       className="btn"
                       onClick={goNext}
-                      disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}
+                      disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}
                     >
                       {isLast ? "Finish → Survey" : "Next →"}
                     </button>
