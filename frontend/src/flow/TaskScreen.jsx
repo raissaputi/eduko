@@ -669,7 +669,7 @@ export default function TaskScreen({ testType = "fe" }) {
                     {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
                     {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
                     {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
-                    <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
+                    <button className="btn primary" onClick={submit} disabled={submitted || uploadingRecording}>{submitted ? 'Submitted':'Submit'}</button>
                     <button className="btn" onClick={goNext} disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}>{isLast ? 'Finish → Survey':'Next →'}</button>
                   </div>
                 </div>
@@ -692,7 +692,7 @@ export default function TaskScreen({ testType = "fe" }) {
                       {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
                       {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
                       {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
-                      <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
+                      <button className="btn primary" onClick={submit} disabled={submitted || uploadingRecording}>{submitted ? 'Submitted':'Submit'}</button>
                       <button className="btn" onClick={goNext} disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}>{isLast ? 'Finish → Survey':'Next →'}</button>
                     </div>
                   </div>
@@ -708,7 +708,7 @@ export default function TaskScreen({ testType = "fe" }) {
                     {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
                     {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
                     {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
-                    <button className="btn primary" onClick={submit} disabled={submitted}>
+                    <button className="btn primary" onClick={submit} disabled={submitted || uploadingRecording}>
                       {submitted ? "Submitted" : "Submit"}
                     </button>
                     <button
