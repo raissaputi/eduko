@@ -183,9 +183,10 @@ def compile_session_log(session_id: str, split_by_problem: bool = True) -> Tuple
         # List subdirectories in problems/
         problem_dirs = storage.list_dir(problems_prefix)
         for problem_name in problem_dirs:
-            if not problem_name.endswith('/'):
-                continue
+            # Handle both with and without trailing slash (S3 inconsistency)
             problem_id = problem_name.rstrip('/')
+            if not problem_id:  # Skip empty entries
+                continue
             
             chat_file_path = f"{problems_prefix}/{problem_id}/chat.jsonl"
             if storage.exists(chat_file_path):
