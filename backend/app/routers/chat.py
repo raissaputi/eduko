@@ -13,7 +13,7 @@ router = APIRouter(tags=["chat"])
 class ChatIn(BaseModel):
     message: str
     session_id: str
-    problem_id: Optional[int] = None
+    problem_id: Optional[str] = None  # Changed from int to str to support "fe1", "dv1" etc
     problem_title: Optional[str] = None
     problem_statement: Optional[str] = None
     thread_id: Optional[str] = None
