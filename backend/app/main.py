@@ -20,6 +20,7 @@ app.add_middleware(
 )
 
 # Serve data folder for media (images saved from chat)
+os.makedirs("data", exist_ok=True)
 app.mount("/media", StaticFiles(directory="data", html=False), name="media")
 
 @app.get("/health")
