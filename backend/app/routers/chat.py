@@ -90,80 +90,81 @@ async def chat_ws(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_json()
-            message = data.get("message", "")
-            session_id = data.get("session_id", "anon")
-            problem_id = data.get("problem_id")
-            problem_title = data.get("problem_title")
-            problem_statement = data.get("problem_statement")
-            images = data.get("images")
-            history = data.get("history") or []
-            if not history:
-                history = [{"role": "user", "text": message}]
-            else:
-                if not history[-1].get("role") == "user" or history[-1].get("text") != message:
-                    history = history + [{"role": "user", "text": message}]
+            try:
+                message = data.get("message", "")
+                session_id = data.get("session_id", "anon")
+                problem_id = data.get("problem_id")
+                problem_title = data.get("problem_title")
+                problem_statement = data.get("problem_statement")
+                images = data.get("images")
+                history = data.get("history") or []
+                if not history:
+                    history = [{"role": "user", "text": message}]
+                else:
+                    if not history[-1].get("role") == "user" or history[-1].get("text") != message:
+                        history = history + [{"role": "user", "text": message}]
 
-            # Persist images to disk and collect URLs
-            image_urls: List[str] = []
-            if images:
-                for data_url in images:
-                    rel = save_chat_image_dataurl(session_id, problem_id, data_url)
-                    if rel:
-                        image_urls.append(f"/media/{rel}")
+                # Persist images to disk and collect URLs
+                image_urls: List[str] = []
+                if images:
+                    for data_url in images:
+                        rel = save_chat_image_dataurl(session_id, problem_id, data_url)
+                        if rel:
+                            image_urls.append(f"/media/{rel}")
 
-            msgs = build_messages(history, images=images)
+                msgs = build_messages(history, images=images)
 
-            # Generate chat ID 
-            current_ts = int(time.time() * 1000)
-            chat_id = f"chat_{current_ts}"
+                # Generate chat ID
+                current_ts = int(time.time() * 1000)
+                chat_id = f"chat_{current_ts}"
 
-            # Log minimal prompt event
-            append_event(session_id, {
-                "event_type": "chat_prompt",
-                "client_ts": current_ts,
-                "session_id": session_id,
-                "payload": {
+                # Log minimal prompt event
+                append_event(session_id, {
+                    "event_type": "chat_prompt",
+                    "client_ts": current_ts,
+                    "session_id": session_id,
+                    "payload": {
+                        "problem_id": problem_id,
+                        "chat_id": chat_id,
+                        "img_count": len(images or []),
+                        "history_turns": len(history)
+                    }
+                })
+
+                # Initialize response collection
+                full_response = ""
+
+                # Stream tokens and collect full response
+                async for tok in provider.stream(msgs):
+                    full_response += tok
+                    await ws.send_json({"type": "token", "text": tok})
+
+                # Store full content in chat.jsonl (include images if any)
+                append_chat_raw(session_id, {
+                    "id": chat_id,
+                    "client_ts": current_ts,
                     "problem_id": problem_id,
-                    "chat_id": chat_id,
-                    "img_count": len(images or []),
-                    "history_turns": len(history)
-                }
-            })
+                    "prompt": message,
+                    "image_urls": image_urls,
+                    "response": full_response
+                })
 
-            # Initialize response collection
-            full_response = ""
-            
-            # Stream tokens and collect full response
-            async for tok in provider.stream(msgs):
-                full_response += tok
-                await ws.send_json({"type": "token", "text": tok})
-            
-            # Store full content in chat.jsonl (include images if any)
-            append_chat_raw(session_id, {
-                "id": chat_id,
-                "client_ts": current_ts,
-                "problem_id": problem_id,
-                "prompt": message,
-                "image_urls": image_urls,
-                "response": full_response
-            })
+                # Log minimal response event
+                append_event(session_id, {
+                    "event_type": "chat_response",
+                    "client_ts": current_ts,
+                    "session_id": session_id,
+                    "payload": {
+                        "problem_id": problem_id,
+                        "chat_id": chat_id,
+                        "img_count": len(images or []),
+                        "history_turns": len(history)
+                    }
+                })
 
-            # Log minimal response event
-            append_event(session_id, {
-                "event_type": "chat_response",
-                "client_ts": current_ts,
-                "session_id": session_id,
-                "payload": {
-                    "problem_id": problem_id,
-                    "chat_id": chat_id,
-                    "img_count": len(images or []),
-                    "history_turns": len(history)
-                }
-            })
-            
-            await ws.send_json({"type": "done"})
+                await ws.send_json({"type": "done"})
+            except Exception as e:
+                # Send error to client but keep the socket open for next messages
+                await ws.send_json({"type": "error", "error": str(e)})
     except WebSocketDisconnect:
         return
-    except Exception as e:
-        await ws.send_json({"type": "error", "error": str(e)})
-        await ws.close()

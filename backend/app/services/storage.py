@@ -77,6 +77,14 @@ class LocalStorage(StorageBackend):
         with open(full_path, 'a', encoding='utf-8') as f:
             f.write(line)
         return str(full_path)
+
+    def append_jsonl_batch(self, path: str, records: list) -> str:
+        full_path = self._full_path(path)
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        lines = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records)
+        with open(full_path, 'a', encoding='utf-8') as f:
+            f.write(lines)
+        return str(full_path)
     
     def read_file(self, path: str) -> bytes:
         full_path = self._full_path(path)

@@ -135,49 +135,86 @@ export default function ChatPanel({ problem }) {
     return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // connect WS once
+  // connect WS with auto-reconnect
+  const reconnectTimerRef = useRef(null)
+  const mountedRef = useRef(true)
+
   useEffect(() => {
-    const ws = new WebSocket(WS_URL)
-    wsRef.current = ws
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      clearTimeout(reconnectTimerRef.current)
+    }
+  }, [])
 
-    ws.onopen = () => { setOnline(true); logEvent('chat_ws_open', { url: WS_URL }) }
-    ws.onclose = () => { setOnline(false); logEvent('chat_ws_close', {}) }
-    ws.onerror = () => { setOnline(false); logEvent('chat_ws_error', {}) }
+  const connectWS = useRef(null)
+  useEffect(() => {
+    let ws
 
-    ws.onmessage = ev => {
-      try {
-        const msg = JSON.parse(ev.data)
-        if (msg.type === 'token') {
-          setMessages(prev => {
-            const last = prev[prev.length - 1]
-            if (last?.role === 'assistant' && last.streaming) {
-              const m = [...prev]
-              m[m.length - 1] = { ...last, text: (last.text || '') + msg.text, streaming: true }
-              return m
-            }
-            return [...prev, { id: crypto.randomUUID(), role: 'assistant', text: msg.text, streaming: true }]
-          })
-        } else if (msg.type === 'done') {
-          setMessages(prev => {
-            const last = prev[prev.length - 1]
-            if (last?.role === 'assistant') {
-              const m = [...prev]
-              m[m.length - 1] = { ...last, streaming: false }
-              return m
-            }
-            return prev
-          })
-          logEvent('chat_done', { problem_id: meta.problem_id })
-        } else if (msg.type === 'error') {
-          setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: 'Error: ' + msg.error }])
-          logEvent('chat_error', { problem_id: meta.problem_id, error: msg.error })
+    connectWS.current = () => {
+      if (!mountedRef.current) return
+      ws = new WebSocket(WS_URL)
+      wsRef.current = ws
+
+      ws.onopen = () => { if (mountedRef.current) setOnline(true); logEvent('chat_ws_open', { url: WS_URL }) }
+      ws.onclose = () => {
+        if (!mountedRef.current) return
+        setOnline(false)
+        logEvent('chat_ws_close', {})
+        // auto-reconnect after 3s
+        reconnectTimerRef.current = setTimeout(() => connectWS.current?.(), 3000)
+      }
+      ws.onerror = () => { logEvent('chat_ws_error', {}) }
+
+      ws.onmessage = ev => {
+        try {
+          const msg = JSON.parse(ev.data)
+          if (msg.type === 'token') {
+            setMessages(prev => {
+              const last = prev[prev.length - 1]
+              if (last?.role === 'assistant' && last.streaming) {
+                const m = [...prev]
+                m[m.length - 1] = { ...last, text: (last.text || '') + msg.text, streaming: true }
+                return m
+              }
+              return [...prev, { id: crypto.randomUUID(), role: 'assistant', text: msg.text, streaming: true }]
+            })
+          } else if (msg.type === 'done') {
+            setMessages(prev => {
+              const last = prev[prev.length - 1]
+              if (last?.role === 'assistant') {
+                const m = [...prev]
+                m[m.length - 1] = { ...last, streaming: false }
+                return m
+              }
+              return prev
+            })
+            logEvent('chat_done', { problem_id: meta.problem_id })
+          } else if (msg.type === 'error') {
+            // Error from LLM — mark last streaming message as done, show error inline
+            setMessages(prev => {
+              const last = prev[prev.length - 1]
+              if (last?.role === 'assistant' && last.streaming) {
+                const m = [...prev]
+                m[m.length - 1] = { ...last, streaming: false }
+                return [...m, { id: crypto.randomUUID(), role: 'assistant', text: 'Error: ' + msg.error }]
+              }
+              return [...prev, { id: crypto.randomUUID(), role: 'assistant', text: 'Error: ' + msg.error }]
+            })
+            logEvent('chat_error', { problem_id: meta.problem_id, error: msg.error })
+          }
+        } catch (_e) {
+          logEvent('chat_error', { problem_id: meta.problem_id, error: 'parse_error' })
         }
-      } catch (_e) {
-        logEvent('chat_error', { problem_id: meta.problem_id, error: 'parse_error' })
       }
     }
 
-    return () => ws.close()
+    connectWS.current()
+
+    return () => {
+      clearTimeout(reconnectTimerRef.current)
+      ws?.close()
+    }
   }, [meta.problem_id])
 
   const isStreaming = messages.some(m => m.streaming)
@@ -243,15 +280,17 @@ export default function ChatPanel({ problem }) {
       wsRef.current.send(JSON.stringify(payload))
       setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: '', streaming: true }])
     } else {
+      const loadingId = crypto.randomUUID()
+      setMessages(p => [...p, { id: loadingId, role: 'assistant', text: '', streaming: true }])
       fetch(`${API}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...payload, session_id: meta.session_id })
       })
         .then(r => r.json())
-        .then(data => setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: data.reply }]))
+        .then(data => setMessages(p => p.map(m => m.id === loadingId ? { ...m, text: data.reply, streaming: false } : m)))
         .catch(() => {
-          setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', text: 'Network error.' }])
+          setMessages(p => p.map(m => m.id === loadingId ? { ...m, text: 'Network error.', streaming: false } : m))
           logEvent('chat_error', { problem_id: meta.problem_id, error: 'network' })
         })
     }

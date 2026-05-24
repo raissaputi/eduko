@@ -26,3 +26,6 @@ backend/data
 # OS
 .DS_Store
 Thumbs.db
+
+real_data
+paper

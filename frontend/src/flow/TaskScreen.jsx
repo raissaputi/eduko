@@ -6,7 +6,6 @@ import ChatPanel from "../components/Chat/ChatPanel.jsx";
 import FEWorkbench from "../components/workbench/FEWorkbench.jsx";
 import { logEvent } from '../lib/logger.js'
 import DVNotebook from '../components/workbench/DVNotebook';
-import ScreenRecorder from '../lib/recorder.js';
 
 const THIRTY_MIN_MS = 30 * 60 * 1000;
 
@@ -39,12 +38,6 @@ export default function TaskScreen({ testType = "fe" }) {
 
   const firstPreviewById = useRef({}); // to emit first_preview once per problem
   
-  // Screen recording
-  const recorderRef = useRef(null);
-  const [recordingStatus, setRecordingStatus] = useState('idle'); // idle | starting | recording | stopping | error
-  const recordingCounterRef = useRef(0); // Track how many recordings per problem
-  const [uploadingRecording, setUploadingRecording] = useState(false); // NEW: Track upload in progress
-
   // lightweight debounce for code_change
   const codeDebounceRef = useRef(null);
   const debounce = (fn, ms = 350) => (...args) => {
@@ -187,77 +180,6 @@ export default function TaskScreen({ testType = "fe" }) {
     })();
   };
 
-  // Helper to stop recording and upload
-  // Helper to stop recording and upload (BLOCKING)
-  const stopAndUploadRecording = async (problemId) => {
-    if (!recorderRef.current) {
-      console.warn('[Recording] No recorder ref, skipping upload');
-      logEvent("recording_no_ref", { problem_id: problemId });
-      return;
-    }
-    
-    setRecordingStatus('stopping');
-    setUploadingRecording(true); // NEW: Start upload
-    logEvent("recording_stop", { problem_id: problemId });
-    
-    try {
-      // Stop and upload final recording
-      recordingCounterRef.current += 1;
-      const { blob } = await recorderRef.current.stop();
-      
-      console.log('[Recording] Stopped, blob size:', blob ? blob.size : 'null');
-      
-      if (!blob) {
-        console.warn('[Recording] No blob returned from recorder');
-        logEvent("recording_no_blob", { problem_id: problemId });
-        return;
-      }
-      
-      if (blob.size === 0) {
-        console.warn('[Recording] Blob is empty (0 bytes)');
-        logEvent("recording_empty_blob", { problem_id: problemId });
-        return;
-      }
-      
-      // Upload final recording with proper naming
-      const filename = `recording_${problemId}_part${recordingCounterRef.current}_${Date.now()}.webm`;
-      const formData = new FormData();
-      formData.append('recording', blob, filename);
-      formData.append('problem_id', problemId);
-      
-      console.log('[Recording] Uploading:', filename, 'Size:', blob.size);
-      
-      const response = await fetch(`${API}/api/sessions/${sessionId}/recording`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
-      }
-      
-      console.log('[Recording] Upload successful');
-      logEvent("recording_uploaded", { 
-        problem_id: problemId,
-        size_bytes: blob.size,
-        recording_number: recordingCounterRef.current,
-        is_final: true
-      });
-      
-      // Reset counter for next problem
-      recordingCounterRef.current = 0;
-    } catch (error) {
-      console.error('[Recording] Upload error:', error);
-      logEvent("recording_upload_error", { 
-        problem_id: problemId,
-        error: error.message 
-      });
-    } finally {
-      setRecordingStatus('idle');
-      setUploadingRecording(false); // NEW: Upload complete
-    }
-  };
-
   const submit = async () => {
     if (!active) return;
     const pid = active.id;
@@ -286,11 +208,7 @@ export default function TaskScreen({ testType = "fe" }) {
         
         // Show success immediately
         alert("Submitted!");
-        
-        // Stop and upload recording in background (non-blocking)
-        // stopAndUploadRecording(pid).catch(err => console.warn('Recording upload failed:', err));
-        await stopAndUploadRecording(pid);
-        
+
         // Trigger compile_human after submission
         fetch(`${API}/api/sessions/${sessionId}/compile`, {
           method: 'POST'
@@ -317,10 +235,7 @@ export default function TaskScreen({ testType = "fe" }) {
       
       // Show success immediately
       alert("Submitted!");
-      
-      // Stop and upload recording (BLOCKING - wait for completion)
-      await stopAndUploadRecording(pid); // NEW: Changed from .catch() to await
-      
+
       // Trigger compile_human after submission
       fetch(`${API}/api/sessions/${sessionId}/compile`, {
         method: 'POST'
@@ -379,142 +294,6 @@ export default function TaskScreen({ testType = "fe" }) {
     // task_enter when a question becomes active
     logEvent("task_enter", { problem_id: active.id });
 
-    // Start screen recording when task begins
-    const startRecording = async () => {
-      let attempts = 0;
-      const maxAttempts = 10; // Prevent infinite loop
-      
-      while (attempts < maxAttempts) {
-        attempts++;
-        
-        // Show instruction before triggering browser dialog
-        const confirmed = window.confirm(
-          "Pengaturan Rekaman Layar\n\n" +
-          "Pada dialog berikutnya:\n" +
-          "1. Klik tab 'Entire Screen' di bagian atas\n" +
-          "2. Pilih layar penuh Anda dari preview\n" +
-          "3. Klik tombol 'Share'\n\n" +
-          "Rekaman ini membantu kami memahami proses penyelesaian masalah Anda.\n\n" +
-          "Siap untuk melanjutkan?"
-        );
-        
-        if (!confirmed) {
-          // User clicked Cancel on instruction dialog - ask again
-          const retry = window.confirm(
-            "Rekaman layar diperlukan untuk berpartisipasi dalam penelitian ini.\n\n" +
-            "Apakah Anda ingin mencoba lagi?"
-          );
-          if (!retry) {
-            setRecordingStatus('error');
-            logEvent("recording_declined", { problem_id: active.id, attempts });
-            alert("Tidak dapat melanjutkan tanpa rekaman layar. Silakan refresh halaman untuk memulai ulang.");
-            return;
-          }
-          continue; // Ask again
-        }
-
-        if (!recorderRef.current) {
-          recorderRef.current = new ScreenRecorder();
-        }
-        
-        setRecordingStatus('starting');
-        
-        // Handler when user stops recording via browser button
-        const handleUserStopped = async (chunks) => {
-          // Upload current recording before restarting
-          recordingCounterRef.current += 1;
-          
-          if (chunks && chunks.length > 0) {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            
-            // Upload this segment with proper naming
-            const filename = `recording_${active.id}_part${recordingCounterRef.current}_${Date.now()}.webm`;
-            const formData = new FormData();
-            formData.append('recording', blob, filename);
-            formData.append('problem_id', active.id);
-            
-            fetch(`${API}/api/sessions/${sessionId}/recording`, {
-              method: 'POST',
-              body: formData
-            }).then(() => {
-              logEvent("recording_segment_uploaded", { 
-                problem_id: active.id,
-                recording_number: recordingCounterRef.current,
-                size_bytes: blob.size
-              });
-            }).catch(err => {
-              console.warn('Upload failed:', err);
-              logEvent("recording_segment_upload_failed", { 
-                problem_id: active.id,
-                recording_number: recordingCounterRef.current,
-                error: err.message
-              });
-            });
-          }
-          
-          setRecordingStatus('error');
-          logEvent("recording_stopped_by_user", { 
-            problem_id: active.id,
-            recording_number: recordingCounterRef.current
-          });
-          
-          // Immediately restart recording
-          setTimeout(() => {
-            alert(
-              "Rekaman layar telah dihentikan.\n\n" +
-              "Rekaman diperlukan selama sesi berlangsung.\n\n" +
-              "Silakan mulai rekaman kembali."
-            );
-            startRecording(); // Restart the whole flow
-          }, 100);
-        };
-        
-        const result = await recorderRef.current.start(handleUserStopped);
-        
-        if (result.success) {
-          setRecordingStatus('recording');
-          logEvent("recording_start", { 
-            problem_id: active.id,
-            session_id: sessionId,
-            attempts 
-          });
-          return; // Success - exit loop
-        } else {
-          // Failed (user cancelled browser dialog or error)
-          setRecordingStatus('idle');
-          logEvent("recording_failed_attempt", { 
-            problem_id: active.id,
-            error: result.error,
-            attempts 
-          });
-          
-          const retry = window.confirm(
-            "Pengaturan rekaman layar gagal.\n\n" +
-            "Ini mungkin terjadi jika Anda:\n" +
-            "- Klik Cancel\n" +
-            "- Memilih tab atau window alih-alih Entire Screen\n" +
-            "- Menolak izin\n\n" +
-            "Silakan coba lagi dan pastikan memilih 'Entire Screen'."
-          );
-          
-          if (!retry) {
-            setRecordingStatus('error');
-            logEvent("recording_declined", { problem_id: active.id, attempts });
-            alert("Tidak dapat melanjutkan tanpa rekaman layar. Silakan refresh halaman untuk memulai ulang.");
-            return;
-          }
-          // Loop will continue to ask again
-        }
-      }
-      
-      // Max attempts reached
-      setRecordingStatus('error');
-      logEvent("recording_max_attempts", { problem_id: active.id });
-      alert("Terlalu banyak percobaan gagal. Silakan refresh halaman dan coba lagi.");
-    };
-
-    startRecording();
-
     clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       setTimeLeftById(prev => {
@@ -565,8 +344,6 @@ export default function TaskScreen({ testType = "fe" }) {
             logEvent("submit_final", { problem_id: pid, size: code.length, auto: true });
           }
           
-          // Stop and upload recording
-          await stopAndUploadRecording(pid);
         } catch { /* noop */ }
         setSubmittedById(prev => ({ ...prev, [active.id]: true }));
         goNext();
@@ -666,11 +443,8 @@ export default function TaskScreen({ testType = "fe" }) {
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:10, marginTop:'auto'}}>
                     <div className="timer">⏱ {formatMMSS(leftMs)}</div>
-                    {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
-                    {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
-                    {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
-                    <button className="btn primary" onClick={submit} disabled={submitted || uploadingRecording}>{submitted ? 'Submitted':'Submit'}</button>
-                    <button className="btn" onClick={goNext} disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}>{isLast ? 'Finish → Survey':'Next →'}</button>
+                    <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
+                    <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
                   </div>
                 </div>
               </div>
@@ -689,11 +463,8 @@ export default function TaskScreen({ testType = "fe" }) {
                     </div>
                     <div style={{display:'flex', alignItems:'center', gap:10, marginTop:'auto'}}>
                       <div className="timer">⏱ {formatMMSS(leftMs)}</div>
-                      {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
-                      {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
-                      {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
-                      <button className="btn primary" onClick={submit} disabled={submitted || uploadingRecording}>{submitted ? 'Submitted':'Submit'}</button>
-                      <button className="btn" onClick={goNext} disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}>{isLast ? 'Finish → Survey':'Next →'}</button>
+                      <button className="btn primary" onClick={submit} disabled={submitted}>{submitted ? 'Submitted':'Submit'}</button>
+                      <button className="btn" onClick={goNext} disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}>{isLast ? 'Finish → Survey':'Next →'}</button>
                     </div>
                   </div>
                 </div>
@@ -705,16 +476,13 @@ export default function TaskScreen({ testType = "fe" }) {
                   </div>
                   <div className="right">
                     <div className="timer">⏱ {formatMMSS(leftMs)}</div>
-                    {recordingStatus === 'recording' && <span style={{color:'#e74c3c', fontSize:12}}>🔴 Recording</span>}
-                    {recordingStatus === 'error' && <span style={{color:'#95a5a6', fontSize:12, cursor:'help'}} title="Screen recording permission denied">⚠️ No recording</span>}
-                    {uploadingRecording && <span style={{color:'#f39c12', fontSize:12}}>⏳ Uploading...</span>} {/* NEW */}
-                    <button className="btn primary" onClick={submit} disabled={submitted || uploadingRecording}>
+                    <button className="btn primary" onClick={submit} disabled={submitted}>
                       {submitted ? "Submitted" : "Submit"}
                     </button>
                     <button
                       className="btn"
                       onClick={goNext}
-                      disabled={uploadingRecording || (!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0)}
+                      disabled={!submitted && (timeLeftById[active.id] ?? THIRTY_MIN_MS) > 0}
                     >
                       {isLast ? "Finish → Survey" : "Next →"}
                     </button>

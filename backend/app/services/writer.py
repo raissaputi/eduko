@@ -60,33 +60,28 @@ def append_jsonl(file_path: str, obj: Dict[str, Any]) -> None:
     obj = dict(obj)
     obj.setdefault("server_ts", utc_now_iso())
     obj.setdefault("event_id", str(uuid4()))
-    
-    # Read existing content
-    try:
-        existing = storage.read_text(file_path)
-    except:
-        existing = ""
-    
-    # Append new line
-    line = json.dumps(obj, ensure_ascii=False) + "\n"
-    storage.write_text(file_path, existing + line)
+    storage.append_jsonl(file_path, obj)
 
 
 def append_jsonl_many(file_path: str, items: Iterable[Dict[str, Any]]) -> None:
-    """Append multiple JSON objects to storage."""
-    try:
-        existing = storage.read_text(file_path)
-    except:
-        existing = ""
-    
-    lines = []
+    """Append multiple JSON objects to storage. Uses a single read-write for S3, atomic appends for local."""
+    prepared = []
     for obj in items:
         obj = dict(obj)
         obj.setdefault("server_ts", utc_now_iso())
         obj.setdefault("event_id", str(uuid4()))
-        lines.append(json.dumps(obj, ensure_ascii=False))
-    
-    storage.write_text(file_path, existing + "\n".join(lines) + "\n")
+        prepared.append(obj)
+
+    # Use batch append if available (local), else fall back to read-modify-write (S3)
+    if hasattr(storage, 'append_jsonl_batch'):
+        storage.append_jsonl_batch(file_path, prepared)
+    else:
+        try:
+            existing = storage.read_text(file_path)
+        except:
+            existing = ""
+        lines = [json.dumps(obj, ensure_ascii=False) for obj in prepared]
+        storage.write_text(file_path, existing + "\n".join(lines) + "\n")
 
 
 # ---------- Simple text/file writers (S3-compatible) ----------

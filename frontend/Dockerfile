@@ -1,12 +1,16 @@
-# --- dev image running Vite dev server ---
-FROM node:20-alpine
-
+# Build
+FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
-# pick your pm: npm, pnpm, yarn; here we use npm by default
+COPY package.json package-lock.json* ./
 RUN npm install
+COPY . .
+ARG VITE_API_BASE
+ENV VITE_API_BASE=$VITE_API_BASE
+RUN npm run build
 
-# copy source at runtime via volume for hot reload (compose)
-EXPOSE 5173
-# Vite dev server binding to all interfaces + no strict host check
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+# Serve
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
