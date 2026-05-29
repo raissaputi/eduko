@@ -115,8 +115,15 @@ class S3Storage(StorageBackend):
         """Lazy load boto3 client"""
         if self._client is None:
             import boto3
+            from botocore.config import Config
             endpoint = os.getenv("S3_ENDPOINT_URL", "").strip()
-            kwargs = {'region_name': self.region}
+            kwargs = {
+                'region_name': self.region,
+                'config': Config(
+                    signature_version='s3v4',
+                    s3={'addressing_style': 'path'}
+                )
+            }
             if endpoint:
                 kwargs['endpoint_url'] = endpoint
             self._client = boto3.client('s3', **kwargs)
