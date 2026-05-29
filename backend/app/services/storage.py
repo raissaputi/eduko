@@ -117,13 +117,17 @@ class S3Storage(StorageBackend):
             import boto3
             from botocore.config import Config
             endpoint = os.getenv("S3_ENDPOINT_URL", "").strip()
-            kwargs = {
-                'region_name': self.region,
-                'config': Config(
-                    signature_version='s3v4',
-                    s3={'addressing_style': 'path'}
-                )
-            }
+            # GCS-compatible config: path-style, SigV4, no auto-checksum (boto3 1.35+ adds checksums GCS rejects)
+            config_kwargs = dict(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path', 'payload_signing_enabled': False},
+            )
+            try:
+                config_kwargs['request_checksum_calculation'] = 'when_required'
+                config_kwargs['response_checksum_validation'] = 'when_required'
+            except Exception:
+                pass
+            kwargs = {'region_name': self.region, 'config': Config(**config_kwargs)}
             if endpoint:
                 kwargs['endpoint_url'] = endpoint
             self._client = boto3.client('s3', **kwargs)
