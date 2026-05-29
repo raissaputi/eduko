@@ -11,6 +11,7 @@ import json
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")  # 'local' or 's3'
 S3_BUCKET = os.getenv("S3_BUCKET", "eduko-research-data")
 AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-1")
+S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "")  # set for R2/Backblaze, leave empty for AWS
 
 
 class StorageBackend:
@@ -114,7 +115,12 @@ class S3Storage(StorageBackend):
         """Lazy load boto3 client"""
         if self._client is None:
             import boto3
-            self._client = boto3.client('s3', region_name=self.region)
+            endpoint = os.getenv("S3_ENDPOINT_URL", "").strip()
+            kwargs = {'region_name': self.region}
+            if endpoint:
+                kwargs['endpoint_url'] = endpoint
+            self._client = boto3.client('s3', **kwargs)
+            print(f"✓ S3 client: endpoint={endpoint or 'AWS default'} region={self.region}")
         return self._client
     
     def _s3_key(self, path: str) -> str:
@@ -196,7 +202,7 @@ def get_storage() -> StorageBackend:
     if _storage is None:
         if STORAGE_BACKEND == "s3":
             _storage = S3Storage(bucket=S3_BUCKET, region=AWS_REGION)
-            print(f"✓ Storage: S3 bucket={S3_BUCKET}")
+            print(f"✓ Storage: S3 bucket={S3_BUCKET} endpoint={S3_ENDPOINT_URL or 'AWS default'}")
         else:
             _storage = LocalStorage(base_dir="data")
             print(f"✓ Storage: Local filesystem")

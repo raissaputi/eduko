@@ -11,7 +11,8 @@ import os
 app = FastAPI(title="Research MVP")
 
 # Get CORS origins from environment variable
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+_raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+cors_origins = ["*"] if _raw_origins.strip() == "*" else [o.strip() for o in _raw_origins.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
